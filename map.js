@@ -1,55 +1,71 @@
 /**
  * Frontend JavaScript Logic: Initializes a Leaflet Map, adds markers,
- * and draws animated CURVED attack lines on an HTML5 Canvas overlay
- * using quadratic Bezier curves.
+ * and draws animated CURVED attack lines on an HTML5 Canvas overlay.
+ *
+ * MODIFIED: Replaced the modal with a swappable "Details Panel."
+ * MODIFIED: Traceroute animation now "hops" from node to node.
  */
 document.addEventListener('DOMContentLoaded', () => {
     // --- 1. DATA AND VARIABLE SETUP ---
-
-    // Retrieve data injected by PHP
     const siemData = window.siemData || {};
     const homeLocation = siemData.homeLocation;
     const realEvents = siemData.realEvents || [];
     const simEvents = siemData.simEvents || [];
     const severityMap = siemData.severityMap || {};
 
-    // Get map and canvas elements
     const mapContainer = document.getElementById('map');
     const canvas = document.getElementById('attackCanvas');
     const ctx = canvas.getContext('2d');
     
-    // Server coordinates
     const homeLat = homeLocation.lat;
     const homeLon = homeLocation.lon;
     const homeCoords = [homeLat, homeLon];
     
     // Global state for animation
     let dashOffset = 0;
-    let currentEventsToDraw = []; // Holds the list of events (real or sim)
+    let currentEventsToDraw = [];
+    let currentTraceHops = [];
     
+    // --- NEW: Hop Animation State ---
+    let currentHopToAnimate = -1; // Index of the hop being animated. -1 means idle.
+    let hopAnimationTimer = 0;
+    const HOP_ANIMATION_SPEED = 30; // Frames to wait before next hop (30 frames ≈ 0.5s)
+
     // Layer and marker tracking
-    let eventLayer = null; // Will hold Leaflet markers
+    let eventLayer = null;
+    let traceLayer = null;
     const markersById = {};
 
-    // --- 2. LEAFLET MAP INITIALIZATION ---
+    // Panel Management Elements
+    const eventListContainer = document.getElementById('eventListContainer');
+    const detailsPanelContainer = document.getElementById('detailsPanelContainer');
+    const backToEventsButton = document.getElementById('backToEventsButton');
     
-    // Initialize the Leaflet map
+    // Details Panel Elements
+    const detailsDescription = document.getElementById('detailsDescription');
+    const detailsSourceIp = document.getElementById('detailsSourceIp');
+    const detailsRawLogs = document.getElementById('detailsRawLogs');
+    const traceRouteButton = document.getElementById('traceRouteButton');
+    const traceStatus = document.getElementById('trace-status');
+    const traceHopList = document.getElementById('trace-hop-list');
+    
+    let currentEventForTrace = null; // Store the selected event
+
+    // --- 2. LEAFLET MAP INITIALIZATION ---
     const map = L.map('map', {
         center: (homeLat !== 0 || homeLon !== 0) ? homeCoords : [20, 0],
         zoom: (homeLat !== 0 || homeLon !== 0) ? 3 : 2
     });
 
-    // Add the dark mode tile layer
     L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors',
         maxZoom: 18,
         id: 'stamen-toner-dark'
     }).addTo(map);
 
-    // Create a Layer Group just for markers
     eventLayer = L.layerGroup().addTo(map);
+    traceLayer = L.layerGroup().addTo(map);
 
-    // Add Home Marker (Server Location)
     function addHomeMarker() {
          if (homeLat !== 0 || homeLon !== 0) {
             L.marker(homeCoords, {
@@ -59,130 +75,139 @@ document.addEventListener('DOMContentLoaded', () => {
                     iconSize: [21, 21],
                     iconAnchor: [10, 10]
                 })
-            }).addTo(eventLayer).bindPopup(`
-                <div style="font-family: 'Inter', sans-serif; text-align: center; color: #1e293b;">
-                    <strong>Server Location</strong><br>
-                    ${homeLocation.city}, ${homeLocation.country}<br>
-                    <small>Public IP: ${homeLocation.ip}</small><br>
-                    <small>Private IP: ${homeLocation.private_ip}</small>
-                </div>
-            `).openPopup();
+            }).addTo(eventLayer).bindPopup(
+                `<div style="font-family: 'Inter', sans-serif; text-align: center; color: #1e293b;">` +
+                `<strong>Server Location</strong><br>` +
+                `${homeLocation.city}, ${homeLocation.country}<br>` +
+                `<small>Public IP: ${homeLocation.ip}</small><br>` +
+                `<small>Private IP: ${homeLocation.private_ip}</small>` +
+                `</div>`
+            ).openPopup();
         }
     }
     
-    // --- 3. CANVAS DRAWING LOGIC (From Inspiration File) ---
-
-    // Resizes the canvas to fill the map container
+    // --- 3. CANVAS DRAWING LOGIC ---
     function resizeCanvas() {
         canvas.width = mapContainer.clientWidth;
         canvas.height = mapContainer.clientHeight;
     }
 
     /**
-     * Draws a single animated quadratic Bezier curve on the canvas.
-     * This logic is adapted directly from the inspiration file.
-     * @param {object} startPixel - {x, y} pixel coords for start
-     * @param {object} endPixel - {x, y} pixel coords for end
-     * @param {string} color - The CSS color for the line
+     * --- MODIFIED: Added `isAnimated` parameter ---
+     * Can now draw a static line or an animated "marching ants" line.
      */
-    function drawQuadraticCurve(startPixel, endPixel, color) {
+    function drawQuadraticCurve(startPixel, endPixel, color, lineDash = [8, 12], lineWidth = 2.5, alpha = 0.8, isAnimated = true) {
         const x1 = startPixel.x;
         const y1 = startPixel.y;
         const x2 = endPixel.x;
         const y2 = endPixel.y;
-
-        // 1. Find midpoint
         const midX = (x1 + x2) / 2;
         const midY = (y1 + y2) / 2;
-
-        // 2. Calculate curve height
         const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-        const curveHeight = Math.min(distance * 0.3, 100); // Bend 30% of distance, max 100px
-
-        // 3. Determine direction and find control point
-        const curveDirection = (x2 > x1) ? 1 : -1; // Bend "up" or "down"
+        const curveHeight = Math.min(distance * 0.3, 100);
+        const curveDirection = (x2 > x1) ? 1 : -1;
         const controlX = midX;
         const controlY = midY - (curveHeight * curveDirection);
-
-        // 4. Draw the line
+        
         ctx.beginPath();
         ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo(controlX, controlY, x2, y2); // The core canvas function
-
-        // 5. Style it with the animated dash
+        ctx.quadraticCurveTo(controlX, controlY, x2, y2);
+        
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
-        ctx.globalAlpha = 0.8;
-        ctx.setLineDash([8, 12]);
-        ctx.lineDashOffset = dashOffset;
+        ctx.lineWidth = lineWidth;
+        ctx.globalAlpha = alpha;
+        ctx.setLineDash(lineDash);
+        
+        // Only use the moving dashOffset if the line is animated
+        if (isAnimated) {
+            ctx.lineDashOffset = dashOffset;
+        } else {
+            ctx.lineDashOffset = 0;
+        }
+        
         ctx.stroke();
     }
 
     /**
-     * The main animation loop.
-     * This function runs every frame, clears the canvas, and redraws all curves.
+     * --- MODIFIED: The main animation loop ---
+     * Now includes logic for the hop-by-hop animation.
      */
     function animate() {
-        // Update the animation offset
-        dashOffset -= 0.5; // Controls speed of the "marching ants"
+        // Update global "marching ants" offset
+        dashOffset -= 0.2;
         if (dashOffset < -20) dashOffset = 0;
 
-        // Clear the entire canvas
+        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Loop through the currently active list (real or sim)
+        // 1. Draw all main attack events (always animated)
         currentEventsToDraw.forEach(event => {
-            // Only draw external events that have coordinates
             if (event.type === 'EXTERNAL' && event.lat !== null && event.lon !== null && (event.lat !== 0 || event.lon !== 0)) {
-                
-                // CRITICAL: Convert lat/lon to (x,y) pixels *every frame*
-                // This syncs the canvas drawing with the Leaflet map's zoom/pan
-                const attackCoords = [event.lat, event.lon];
-                const startPixel = map.latLngToContainerPoint(attackCoords);
+                const startPixel = map.latLngToContainerPoint([event.lat, event.lon]);
                 const endPixel = map.latLngToContainerPoint(homeCoords);
-                
                 const severityColor = severityMap[event.severity] || '#fff';
-
-                // Draw the curve
-                drawQuadraticCurve(startPixel, endPixel, severityColor);
+                drawQuadraticCurve(startPixel, endPixel, severityColor, [8, 12], 2.5, 0.8, true);
             }
         });
 
-        // Request the next frame
+        // 2. --- NEW: Draw the "hopping" traceroute path ---
+        if (currentTraceHops.length > 0 && currentHopToAnimate >= 0) {
+            
+            // This loop draws all the "settled" (finished) hops
+            for (let i = 0; i < currentHopToAnimate; i++) {
+                const hopA = currentTraceHops[i];
+                const hopB = (i + 1 < currentTraceHops.length) ? currentTraceHops[i+1] : homeLocation;
+                
+                const startPixel = map.latLngToContainerPoint([hopA.lat, hopA.lon]);
+                const endPixel = map.latLngToContainerPoint([hopB.lat, hopB.lon]);
+                
+                // Draw as a faint, static (isAnimated: false) line
+                drawQuadraticCurve(startPixel, endPixel, '#0e7490', [5, 5], 2, 0.4, false);
+            }
+            
+            // This draws the *current, active* hop
+            if (currentHopToAnimate < currentTraceHops.length) {
+                const hopA = currentTraceHops[currentHopToAnimate];
+                const hopB = (currentHopToAnimate + 1 < currentTraceHops.length) ? currentTraceHops[currentHopToAnimate + 1] : homeLocation;
+                
+                const startPixel = map.latLngToContainerPoint([hopA.lat, hopA.lon]);
+                const endPixel = map.latLngToContainerPoint([hopB.lat, hopB.lon]);
+                
+                // Draw as a bright, animated (isAnimated: true) line
+                drawQuadraticCurve(startPixel, endPixel, '#0e7490', [5, 5], 3, 1.0, true);
+            }
+
+            // 3. --- NEW: Update the hop animation timer ---
+            // (Stops advancing once the last hop is drawn)
+            if (currentHopToAnimate < currentTraceHops.length) {
+                hopAnimationTimer++;
+                if (hopAnimationTimer > HOP_ANIMATION_SPEED) {
+                    currentHopToAnimate++;
+                    hopAnimationTimer = 0;
+                }
+            }
+        }
+
         requestAnimationFrame(animate);
     }
 
     // --- 4. EVENT LIST AND UI LOGIC ---
 
-    // Clears only the Leaflet markers
     function clearLeafletMarkers() {
         eventLayer.clearLayers();
         for (const k in markersById) delete markersById[k];
-        addHomeMarker(); // Re-add the home marker
+        addHomeMarker();
     }
 
-    /**
-     * Renders markers on Leaflet and sets the list for the canvas to draw.
-     * @param {Array} list - The list of events to display (real or sim)
-     */
     function renderEvents(list) {
         clearLeafletMarkers();
-        
-        // Set this list as the one for the 'animate' loop to draw
         currentEventsToDraw = list;
         if (!list) return;
         
         list.forEach(event => {
-            // We ONLY add the circle markers to Leaflet.
-            // The canvas 'animate' loop handles drawing the lines.
             if (event.type === 'EXTERNAL' && event.lat !== null && event.lon !== null && (event.lat !== 0 || event.lon !== 0)) {
                 const attackCoords = [event.lat, event.lon];
                 const severityColor = severityMap[event.severity] || '#fff';
-
-                // --- DELETED L.polyline() and animateLine() ---
-                // ... The canvas 'animate' function replaces this ...
-
-                // Add the attacker's circle marker to Leaflet
                 const marker = L.circleMarker(attackCoords, {
                     radius: 6,
                     fillColor: severityColor,
@@ -190,24 +215,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     weight: 1,
                     opacity: 1,
                     fillOpacity: 0.8
-                }).addTo(eventLayer).bindPopup(`
-                    <div style="font-family: 'Inter', sans-serif; color: #1e293b;">
-                        <strong>${event.severity} Attack</strong><br>
-                        ${event.description}<br>
-                        <small>Source IP: ${event.ip}</small><br>
-                        <small>Location: ${event.city}, ${event.country}</small>
-                    </div>
-                `);
-
+                }).addTo(eventLayer).bindPopup(
+                    `<div style="font-family: 'Inter', sans-serif; color: #1e293b;">` +
+                    `<strong>${event.severity} Attack</strong><br>` +
+                    `${event.description}<br>` +
+                    `<small>Source IP: ${event.ip}</small><br>` +
+                    `<small>Location: ${event.city}, ${event.country}</small>` +
+                    `</div>`
+                );
                 markersById[event.id] = marker;
             }
         });
     }
 
-    // Populates the right-hand list panel (This logic is unchanged)
     function populateEventList(list) {
         const container = document.getElementById('eventList');
-        container.innerHTML = ''; // Clear previous list
+        container.innerHTML = '';
         
         if (!list || list.length === 0) {
             container.innerHTML = '<p style="text-align:center; color:#94a3b8;">No events to display for this selection.</p>';
@@ -220,14 +243,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const severityColor = severityMap[event.severity] || '#777';
             item.style.borderLeft = `4px solid ${severityColor}`;
             item.setAttribute('data-log-id', event.id);
-
+            
             const details = document.createElement('div');
             details.className = 'details';
             const strong = document.createElement('strong');
             strong.textContent = event.description;
             const loc = document.createElement('span');
             loc.className = 'location';
-            
             let locHTML = `Source: ${event.ip} `;
             if (event.type === 'EXTERNAL') {
                 locHTML += `<span style="color:#94a3b8;"> (From: ${event.city || 'Unknown'})</span> <span class="target">| Target: ${event.target_device}</span>`;
@@ -235,61 +257,224 @@ document.addEventListener('DOMContentLoaded', () => {
                 locHTML += `<span class="target">| Target: ${event.target_device} (Local)</span>`;
             }
             loc.innerHTML = locHTML;
-
             details.appendChild(strong);
             details.appendChild(loc);
-
             const tag = document.createElement('span');
             tag.className = 'severity-tag';
             tag.style.backgroundColor = severityColor;
             tag.textContent = event.severity;
-
             item.appendChild(details);
             item.appendChild(tag);
 
+            // Click listener opens the Details Panel
             item.addEventListener('click', () => {
-                // open modal
-                const modal = document.getElementById('logDetailModal');
-                document.getElementById('modalDescription').textContent = event.description;
-                document.getElementById('modalSourceIp').textContent = event.ip;
-                document.getElementById('modalTargetAsset').textContent = event.target_device;
-                const severityElement = document.getElementById('modalSeverity');
-                severityElement.textContent = event.severity;
-                severityElement.style.color = severityMap[event.severity];
-                document.getElementById('modalRawLogs').textContent = (event.raw_logs || []).join('\n');
-                modal.style.display = 'block';
-
-                // If marker exists, pan to it and open popup
-                const m = markersById[event.id];
-                if (m) {
-                    map.flyTo(m.getLatLng(), 5, {duration: 0.8});
-                    m.openPopup();
-                }
+                showDetailsPanel(event);
             });
 
             container.appendChild(item);
         });
     }
 
-    // --- 5. MODAL AND TAB CONTROLS (Unchanged) ---
-    
-    const modal = document.getElementById('logDetailModal');
-    const closeBtn = document.querySelector('.close-btn');
+    // --- 5. PANEL MANAGEMENT & TRACE LOGIC ---
 
-    closeBtn.onclick = () => {
-        modal.style.display = "none";
-    };
-
-    window.onclick = (event) => {
-        if (event.target == modal) {
-            modal.style.display = "none";
+    /**
+     * Hides Event List, Shows Details Panel
+     */
+    function showDetailsPanel(event) {
+        currentEventForTrace = event;
+        eventListContainer.style.display = 'none';
+        detailsPanelContainer.style.display = 'flex';
+        detailsDescription.textContent = event.description;
+        detailsSourceIp.textContent = `Source: ${event.ip} | Target: ${event.target_device}`;
+        detailsRawLogs.textContent = (event.raw_logs || []).join('\n');
+        
+        // Reset trace button
+        traceRouteButton.disabled = false;
+        traceRouteButton.textContent = 'Trace Attacker\'s Route';
+        traceStatus.textContent = '';
+        traceHopList.innerHTML = '';
+        
+        if (event.type !== 'EXTERNAL') {
+            traceRouteButton.disabled = true;
+            traceStatus.textContent = 'Cannot trace internal IPs.';
         }
-    };
+
+        clearTraceRoute();
+        const m = markersById[event.id];
+        if (m) {
+            map.flyTo(m.getLatLng(), 5, {duration: 0.8});
+            m.openPopup();
+        }
+    }
+
+    /**
+     * Hides Details Panel, Shows Event List
+     */
+    function showEventListPanel() {
+        detailsPanelContainer.style.display = 'none';
+        eventListContainer.style.display = 'flex';
+        clearTraceRoute();
+        currentEventForTrace = null;
+    }
+    
+    /**
+     * Handles the Trace Route button click
+     */
+    async function handleTraceRoute() {
+        if (!currentEventForTrace) return;
+
+        const ipToTrace = currentEventForTrace.ip;
+        console.log(`[DEBUG] Starting trace for: ${ipToTrace}`);
+        traceRouteButton.disabled = true;
+        clearTraceRoute();
+        traceHopList.innerHTML = '';
+
+        // SIMULATION LOGIC
+        if (currentEventForTrace.simulated && currentEventForTrace.simulated_hops && currentEventForTrace.simulated_hops.length > 0) {
+            console.log('[DEBUG] This is a SIMULATED event. Using pre-canned hops.');
+            traceStatus.textContent = 'Simulating trace...';
+            
+            // --- MODIFIED: Just call drawTracePath, animation loop handles the rest ---
+            drawTracePath(currentEventForTrace.simulated_hops);
+            
+            traceStatus.textContent = `Simulated trace for ${currentEventForTrace.simulated_hops.length} hops.`;
+            traceRouteButton.textContent = 'Trace Complete';
+            return;
+        }
+
+        // REAL TRACE LOGIC
+        console.log('[DEBUG] This is a REAL event. Calling server API...');
+        traceStatus.textContent = 'Tracing... (this may take a minute)';
+
+        try {
+            const response = await fetch(`index.php?action=trace&ip=${ipToTrace}`);
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            
+            const data = await response.json();
+            console.log('[DEBUG] Received trace data:', data);
+
+            if (data.error) throw new Error(data.error);
+
+            if (data.hops && data.hops.length > 0) {
+                // --- MODIFIED: Just call drawTracePath, animation loop handles the rest ---
+                drawTracePath(data.hops);
+                traceStatus.textContent = `Trace complete. Found ${data.hops.length} public hops.`;
+                traceRouteButton.textContent = 'Trace Complete';
+            } else {
+                traceStatus.textContent = 'Trace complete, but no public hops were found.';
+                traceRouteButton.textContent = 'No Hops Found';
+            }
+
+        } catch (error) {
+            console.error('Traceroute failed:', error);
+            traceStatus.textContent = `Error: ${error.message}`;
+            traceRouteButton.disabled = false;
+            traceRouteButton.textContent = 'Trace Attacker\'s Route';
+        }
+    }
+
+    /**
+     * --- MODIFIED: Clears trace data AND resets animation timers ---
+     */
+    function clearTraceRoute() {
+        currentTraceHops = [];
+        traceLayer.clearLayers();
+        if (traceHopList) {
+            traceHopList.innerHTML = '';
+        }
+        // --- NEW: Reset animation state ---
+        currentHopToAnimate = -1;
+        hopAnimationTimer = 0;
+    }
+
+    /**
+     * --- MODIFIED: Populates data and STARTS the hop animation ---
+     */
+    function drawTracePath(hops) {
+        clearTraceRoute();
+        currentTraceHops = hops;
+        traceHopList.innerHTML = ''; // Clear previous list
+
+        // Add our home location to the list of hops for the animation
+        // We'll add it to the markers list *later*
+        const allHopsForAnim = [
+            ...hops,
+            { 
+                ip: homeLocation.ip, 
+                lat: homeLocation.lat, 
+                lon: homeLocation.lon, 
+                city: homeLocation.city, 
+                country: homeLocation.country,
+                isHome: true
+            }
+        ];
+        currentTraceHops = allHopsForAnim;
+
+
+        // Draw markers on Leaflet
+        hops.forEach((hop, index) => {
+            const hopCoords = [hop.lat, hop.lon];
+            const isFirst = index === 0;
+            
+            const marker = L.circleMarker(hopCoords, {
+                radius: isFirst ? 7 : 4,
+                fillColor: isFirst ? '#ef4444' : '#0e7490',
+                color: '#fff',
+                weight: isFirst ? 2 : 1,
+                opacity: 1,
+                fillOpacity: 0.9
+            }).addTo(traceLayer).bindPopup(
+                `<div style="font-family: 'Inter', sans-serif; color: #1e293b;">` +
+                `<strong>Hop ${index + 1}${isFirst ? ' (Attacker)' : ''}</strong><br>` +
+                `<small>IP: ${hop.ip}</small><br>` +
+                `<small>Location: ${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</small>` +
+                `</div>`
+            );
+            if (isFirst) marker.openPopup();
+
+            // Add hop to the list panel
+            const hopDiv = document.createElement('div');
+            hopDiv.innerHTML = `
+                <strong>Hop ${index + 1}:</strong> 
+                <span class="hop-ip">${hop.ip}</span><br>
+                <span class="hop-location">${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</span>
+            `;
+            traceHopList.appendChild(hopDiv);
+        });
+
+        // Add home server to trace layer
+        L.circleMarker(homeCoords, {
+            radius: 7, fillColor: '#38bdf8', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
+        }).addTo(traceLayer).bindPopup(
+            `<div style="font-family: 'Inter', sans-serif; text-align: center; color: #1e293b;">` +
+            `<strong>Server Location (Hop ${hops.length + 1})</strong><br>` +
+            `${homeLocation.city}, ${homeLocation.country}<br>` +
+            `<small>Public IP: ${homeLocation.ip}</small>` +
+            `</div>`
+        );
+        
+        // Add home to the list panel
+        const homeDiv = document.createElement('div');
+        homeDiv.innerHTML = `
+            <strong>Hop ${hops.length + 1}:</strong> 
+            <span class="hop-ip">${homeLocation.ip} (Home)</span><br>
+            <span class="hop-location">${homeLocation.city}, ${homeLocation.country}</span>
+        `;
+        traceHopList.appendChild(homeDiv);
+
+        // --- NEW: Kick off the animation ---
+        currentHopToAnimate = 0;
+        hopAnimationTimer = 0;
+    }
+
+    
+    // --- 6. INITIALIZATION & TAB CONTROLS ---
     
     const tabReal = document.getElementById('tabReal');
     const tabSim = document.getElementById('tabSim');
 
     function setActiveTab(showSim) {
+        showEventListPanel();
         if (showSim) {
             tabSim.classList.add('active');
             tabReal.classList.remove('active');
@@ -305,15 +490,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tabReal.addEventListener('click', () => setActiveTab(false));
     tabSim.addEventListener('click', () => setActiveTab(true));
+    
+    traceRouteButton.addEventListener('click', handleTraceRoute);
+    backToEventsButton.addEventListener('click', showEventListPanel);
 
-    // --- 6. INITIALIZATION ---
-
-    // Sync canvas size and drawing with map move/zoom/resize
     map.on('zoom move', animate);
     map.on('resize', resizeCanvas);
     
     // Initial setup
-    resizeCanvas();     // Size the canvas
-    setActiveTab(false); // Set initial data and render markers
-    animate();          // Start the canvas animation loop
+    resizeCanvas();
+    setActiveTab(false);
+    animate();
 });
+

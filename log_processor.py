@@ -99,16 +99,42 @@ def detect_real_events(lines):
 
 def generate_simulated_events(start_id=1000):
     """Create a fixed set of simulated attack events for debugging."""
-    simulated_ips = [
-        ("103.207.200.10", "Brute Force SSH", "High"),
-        ("45.141.215.118", "SQL Injection Attempt", "Critical"),
-        ("198.51.100.12", "Port Scan Detected", "Medium"),
-        ("80.93.88.25", "Remote Control Attempt", "Critical"),
-        ("176.113.115.155", "Malware Download Signature", "High"),
+    
+    # --- NEW: Define simulated hop paths ---
+    
+    # Path 1: China -> USA
+    path_china = [
+        {"ip": "103.207.200.10", "lat": 39.9042, "lon": 116.4074, "city": "Beijing", "country": "China"},
+        {"ip": "202.97.12.1", "lat": 31.2304, "lon": 121.4737, "city": "Shanghai", "country": "China"},
+        {"ip": "138.197.250.1", "lat": 37.3382, "lon": -121.8863, "city": "San Jose", "country": "United States"},
+        {"ip": "72.14.200.1", "lat": 41.8781, "lon": -87.6298, "city": "Chicago", "country": "United States"}
     ]
+    
+    # Path 2: Russia -> USA
+    path_russia = [
+        {"ip": "45.141.215.118", "lat": 55.7558, "lon": 37.6173, "city": "Moscow", "country": "Russia"},
+        {"ip": "87.250.250.242", "lat": 59.9311, "lon": 30.3609, "city": "Saint Petersburg", "country": "Russia"},
+        {"ip": "195.201.10.1", "lat": 52.5200, "lon": 13.4050, "city": "Berlin", "country": "Germany"},
+        {"ip": "8.8.8.8", "lat": 37.4056, "lon": -122.0775, "city": "Mountain View", "country": "United States"}
+    ]
+    
+    # Path 3: Brazil (Simulated Internal Hop)
+    path_brazil = [
+        {"ip": "176.113.115.155", "lat": -23.5505, "lon": -46.6333, "city": "São Paulo", "country": "Brazil"},
+        {"ip": "10.1.1.1", "lat": 26.305, "lon": -80.0664, "city": "Boca Raton (Sim)", "country": "United States"}
+    ]
+
+    simulated_attacks = [
+        ("103.207.200.10", "Brute Force SSH", "High", path_china),
+        ("45.141.215.118", "SQL Injection Attempt", "Critical", path_russia),
+        ("198.51.100.12", "Port Scan Detected", "Medium", path_brazil), # Re-using path for example
+        ("80.93.88.25", "Remote Control Attempt", "Critical", path_russia), # Re-using path
+        ("176.113.115.155", "Malware Download Signature", "High", path_brazil),
+    ]
+    
     events = []
     
-    for i, (ip, desc, sev) in enumerate(simulated_ips):
+    for i, (ip, desc, sev, path) in enumerate(simulated_attacks):
         full_desc = f"[SIMULATION] {desc}"
         raw_logs = [
             f"sim-log-entry-1: {full_desc} from {ip} targeting {TARGET_IP}",
@@ -121,7 +147,8 @@ def generate_simulated_events(start_id=1000):
             'severity': sev,
             'description': full_desc,
             'raw_logs': raw_logs,
-            'simulated': True
+            'simulated': True,
+            'simulated_hops': path # --- NEW: Added the hop data ---
         })
     return events
 
@@ -154,7 +181,7 @@ def main():
     try:
         with open('log_data.json', 'w') as f:
             json.dump(real_events, f, indent=4)
-        print(f"WTrote {len(real_events)} real events to log_data.json")
+        print(f"Wrote {len(real_events)} real events to log_data.json")
     except Exception as e:
         print(f"Error: could not write log_data.json: {e}")
 
@@ -170,4 +197,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

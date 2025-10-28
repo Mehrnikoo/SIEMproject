@@ -1,4 +1,73 @@
 <?php
+// --- TRACEROUTE API ENDPOINT ---
+if (isset($_GET['action']) && $_GET['action'] === 'trace' && isset($_GET['ip'])) {
+    
+    $ip_to_trace = $_GET['ip'];
+    $hops = [];
+
+    // --- SECURITY: Validate the IP and sanitize for shell command ---
+    if (!filter_var($ip_to_trace, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Invalid or private IP address.']);
+        exit;
+    }
+    
+    $safe_ip = escapeshellarg($ip_to_trace);
+    $command = "traceroute -I -n -w 1 -q 1 -m 20 $safe_ip 2>&1";
+    $output = @shell_exec($command);
+
+    if (empty($output)) {
+        $command = "tracert -d -h 20 -w 1000 $safe_ip 2>&1";
+        $output = @shell_exec($command);
+    }
+    
+    if (empty($output)) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Traceroute command failed or is not installed.']);
+        exit;
+    }
+
+    $lines = explode("\n", $output);
+    $hop_ips = [];
+
+    preg_match_all('/\(?([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})\)?/', $output, $matches);
+    
+    if (isset($matches[1])) {
+        foreach ($matches[1] as $hop_ip) {
+            if (filter_var($hop_ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE) && !in_array($hop_ip, $hop_ips)) {
+                $hop_ips[] = $hop_ip;
+            }
+        }
+    }
+
+    // Now, geolocate each hop IP
+    foreach ($hop_ips as $hop_ip) {
+        $api_url = "http://ip-api.com/json/" . $hop_ip . '?fields=status,lat,lon,city,country';
+        $location_data_raw = @file_get_contents($api_url);
+        
+        if ($location_data_raw) {
+            $data = json_decode($location_data_raw, true);
+            if ($data && $data['status'] === 'success') {
+                $hops[] = [
+                    'ip' => $hop_ip,
+                    'lat' => $data['lat'],
+                    'lon' => $data['lon'],
+                    'city' => $data['city'],
+                    'country' => $data['country']
+                ];
+            }
+        }
+        usleep(150000); // 150ms
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode(['hops' => $hops]);
+    exit;
+}
+// --- END OF TRACEROUTE API ENDPOINT ---
+
+
+// --- Regular page load continues below ---
 // PHP Backend Logic: Consolidated SIEM Analysis and Geolocation
 
 // --- CONFIGURATION ---
@@ -18,6 +87,7 @@ $real_events_raw = json_decode($log_data_raw, true) ?: [];
 
 // Load SIMULATED events from sim_data.json
 $sim_data_raw = @file_get_contents('sim_data.json');
+// --- THIS LINE IS NOW CORRECT ---
 $sim_events_raw = json_decode($sim_data_raw, true) ?: [];
 
 if (empty($real_events_raw) && empty($sim_events_raw)) {
@@ -31,10 +101,7 @@ function process_events(array $events_in) {
     foreach ($events_in as $event) {
         $ip = $event['source_ip'] ?? '';
         $event_severity = $event['severity'] ?? 'Low';
-
-        // Check if IP is public (non-private/non-reserved)
         $event_type = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) ? 'EXTERNAL' : 'INTERNAL';
-
         $event_data = [
             'id' => $event['id'] ?? 0,
             'type' => $event_type,
@@ -43,19 +110,18 @@ function process_events(array $events_in) {
             'target_device' => "Asset (" . ($event['target_ip'] ?? 'Unknown') . ")",
             'description' => $event['description'] ?? '',
             'raw_logs' => $event['raw_logs'] ?? [],
-            'simulated' => $event['simulated'] ?? false // Ensure the flag is carried through
+            'simulated' => $event['simulated'] ?? false,
+            // Pass simulated hops data to frontend
+            'simulated_hops' => $event['simulated_hops'] ?? []
         ];
-
         $event_data['lat'] = null;
         $event_data['lon'] = null;
         $event_data['city'] = 'Internal Network';
         $event_data['country'] = 'Local';
-
         if ($event_type === 'EXTERNAL') {
             // Geocode external IPs only
             $api_url = "http://ip-api.com/json/" . $ip . '?fields=status,message,lat,lon,city,country,regionName,isp';
             $location_data = @file_get_contents($api_url);
-
             if ($location_data !== false) {
                 $data = json_decode($location_data, true);
                 if (isset($data['status']) && $data['status'] === 'success') {
@@ -66,7 +132,6 @@ function process_events(array $events_in) {
                 }
             }
         }
-
         $out[] = $event_data;
     }
     return $out;
@@ -158,6 +223,7 @@ if ($home_data_raw !== false) {
 
 // --- Variables for HTML/JS injection ---
 $event_data_json = json_encode($real_event_data);
+// --- THIS LINE IS NOW CORRECT ---
 $sim_event_data_json = json_encode($sim_event_data);
 $home_location_json = json_encode($home_location_data);
 $severity_map_json = json_encode($severity_map);
@@ -169,14 +235,10 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web SIEM Geolocation Dashboard</title>
-    <!-- Load Inter Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
-    
-    <!-- Load Leaflet Map CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-
     <style>
         /* General Styles */
         body {
@@ -269,21 +331,15 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
             gap: 20px;
         }
 
-        /* --- MODIFIED ---
-           Map Styling (Theme: Dark Blue Ocean / Dark Green Land)
-           Added position: relative to act as a container for the canvas.
-        */
+        /* Map Styling */
         #map {
-            position: relative; /* This is new */
+            position: relative;
             height: 600px; 
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             background-color: #0a2340; /* Deep Navy/Dark Blue for 'Ocean' */
         }
         
-        /* --- NEW ---
-           Style for the attack canvas that sits on top of the map.
-        */
         #attackCanvas {
             position: absolute;
             top: 0;
@@ -294,7 +350,6 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
             pointer-events: none; /* Allows clicks to go through to the map */
         }
         
-        /* CSS Filter to adjust the dark tile layer's color (to dark green land) */
         #map .leaflet-tile-container {
             filter: hue-rotate(-30deg) saturate(1.1) brightness(0.9);
         }
@@ -323,18 +378,24 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
             background:#063a5a; /* Active tab */
             color:#fff;
         }
-
-
-        /* Event List Styling */
-        .event-list-container {
+        
+        /* Right panel container for swapping */
+        #right-panel-column {
             background-color: #1e293b;
             border-radius: 12px;
             padding: 15px;
             max-height: 648px; /* Match map + controls height */
-            overflow-y: auto; 
             border: 1px solid #334155;
             display: flex;
             flex-direction: column;
+        }
+
+        /* Event List Styling (Panel 1) */
+        .event-list-container {
+            display: flex; /* Set to 'flex' or 'none' by JS */
+            flex-direction: column;
+            overflow: hidden;
+            flex-grow: 1;
         }
         
         #eventList {
@@ -392,62 +453,110 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
              font-weight: 500;
         }
         
-        /* Log Details Modal */
-        .log-modal {
-            display: none; 
-            position: fixed; 
-            z-index: 10000; 
-            left: 0;
-            top: 0;
-            width: 100%; 
-            height: 100%; 
-            overflow: auto; 
-            background-color: rgba(0,0,0,0.8); 
+        /* Details Panel Styling (Panel 2) */
+        .details-panel-container {
+            display: none; /* Set to 'flex' or 'none' by JS */
+            flex-direction: column;
+            overflow: hidden;
+            flex-grow: 1;
+            height: 100%;
         }
-        .log-modal-content {
-            background-color: #0f172a;
-            margin: 10% auto;
-            padding: 20px;
-            border: 1px solid #334155;
-            width: 80%;
-            max-width: 700px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        }
-        .log-modal-content h3 {
-            border-bottom: 2px solid #38bdf8;
+
+        .details-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
             padding-bottom: 10px;
-            margin-top: 0;
         }
-        .log-detail-section {
-            padding: 10px 0;
-            border-bottom: 1px dashed #334155;
+        
+        .details-panel-header h2 {
+            color: #cbd5e1;
+            margin: 0;
+            font-size: 1.25rem;
         }
-        .log-detail-section:last-child {
-            border-bottom: none;
-        }
-        .raw-log-output {
-            background-color: #1e293b;
-            padding: 15px;
+
+        .back-button {
+            background: #334155;
+            color: #e2e8f0;
+            border: none;
+            padding: 5px 10px;
             border-radius: 6px;
-            max-height: 300px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .back-button:hover { background: #475569; }
+        
+        .details-panel-content {
+            margin-top: 15px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .details-section {
+            margin-bottom: 15px;
+        }
+
+        .details-section h4 {
+            color: #38bdf8;
+            margin-top: 0;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 5px;
+        }
+
+        .raw-log-output {
+            background-color: #0f172a;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 200px;
             overflow-y: scroll;
             font-family: monospace;
             font-size: 0.85rem;
             white-space: pre-wrap;
+            border: 1px solid #334155;
         }
-        .close-btn {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .close-btn:hover,
-        .close-btn:focus {
-            color: #38bdf8;
-            text-decoration: none;
+
+        .trace-button {
+            background-color: #0e7490;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.2s;
         }
+        .trace-button:hover { background-color: #155e75; }
+        .trace-button:disabled { background-color: #475569; cursor: not-allowed; opacity: 0.7; }
+
+        #trace-status {
+            font-style: italic;
+            color: #94a3b8;
+            margin-left: 10px;
+        }
+
+        #trace-hop-list {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #e2e8f0;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        
+        #trace-hop-list div {
+            padding: 2px 0;
+            border-bottom: 1px dashed #334155;
+        }
+        #trace-hop-list div:last-child { border-bottom: none; }
+        #trace-hop-list .hop-ip { color: #fbbf24; }
+        #trace-hop-list .hop-location { color: #94a3b8; }
 
 
         /* Mobile adjustments */
@@ -458,15 +567,11 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
             #map {
                 height: 400px;
             }
-            .event-list-container {
+            #right-panel-column {
                 max-height: 400px;
             }
             .severity-counts {
                 justify-content: center;
-            }
-            .log-modal-content {
-                width: 90%;
-                margin: 20% auto;
             }
         }
     </style>
@@ -509,70 +614,72 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
         </div>
 
         <div class="content-grid">
+            <!-- Map Column -->
             <div>
                 <div class="map-controls">
                     <button id="tabReal" class="tab active">Real Events (<?php echo count($real_event_data); ?>)</button>
                     <button id="tabSim" class="tab">Simulated (<?php echo count($sim_event_data); ?>)</button>
                 </div>
-                <!-- 
-                  --- MODIFIED ---
-                  The map div now contains the canvas.
-                -->
                 <div id="map">
                     <canvas id="attackCanvas"></canvas>
                 </div>
             </div>
 
-            <!-- Event List Panel (populated by JS based on selected tab) -->
-            <div class="event-list-container" id="eventListContainer">
-                <h2 style="color: #cbd5e1; margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid #334155; padding-bottom: 10px;">Security Event Stream</h2>
-                <div id="eventList">
-                    <!-- Content is populated by map.js -->
-                    <?php if ($data_error): ?>
-                         <p style="text-align: center; color: #fca5a5; margin-top: 40px;"><?php echo htmlspecialchars($data_error); ?></p>
-                    <?php endif; ?>
+            <!-- Right Panel Column (Holds swappable content) -->
+            <div id="right-panel-column">
+
+                <!-- Panel 1: Event Stream (Visible by default) -->
+                <div class="event-list-container" id="eventListContainer">
+                    <h2 style="color: #cbd5e1; margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid #334155; padding-bottom: 10px;">Security Event Stream</h2>
+                    <div id="eventList">
+                        <?php if ($data_error): ?>
+                             <p style="text-align: center; color: #fecaca; margin-top: 40px;"><?php echo htmlspecialchars($data_error); ?></p>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Log Details Modal (Hidden by default) -->
-    <div id="logDetailModal" class="log-modal">
-        <div class="log-modal-content">
-            <span class="close-btn">&times;</span>
-            <h3 id="modalTitle">Raw Log Details</h3>
+                <!-- Panel 2: Details & Trace (Hidden by default) -->
+                <div class="details-panel-container" id="detailsPanelContainer">
+                    <div class="details-panel-header">
+                        <h2>Event Details</h2>
+                        <button id="backToEventsButton" class="back-button">&larr; Back to Events</button>
+                    </div>
+                    <div class="details-panel-content">
+                        <div class="details-section">
+                            <h4>Event Info</h4>
+                            <span id="detailsDescription" style="display: block; margin-bottom: 5px; font-weight: 600;"></span>
+                            <span id="detailsSourceIp" style="font-size: 0.9rem;"></span>
+                        </div>
+                        
+                        <div class="details-section">
+                            <h4>Raw Logs</h4>
+                            <pre class="raw-log-output" id="detailsRawLogs"></pre>
+                        </div>
+                        
+                        <div class="details-section">
+                            <h4>Traceroute</h4>
+                            <button id="traceRouteButton" class="trace-button">Trace Attacker's Route</button>
+                            <span id="trace-status"></span>
+                            <div id="trace-hop-list">
+                                <!-- Hops will be populated here by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-            <div class="log-detail-section">
-                <strong>Event:</strong> <span id="modalDescription"></span>
             </div>
-            <div class="log-detail-section">
-                <strong>Source IP:</strong> <span id="modalSourceIp"></span>
-            </div>
-            <div class="log-detail-section">
-                <strong>Target Asset:</strong> <span id="modalTargetAsset"></span>
-            </div>
-            <div class="log-detail-section">
-                <strong>Severity:</strong> <span id="modalSeverity" style="font-weight: 700;"></span>
-            </div>
-            <div class="log-detail-section">
-                <strong>Raw Logs:</strong>
-                <pre class="raw-log-output" id="modalRawLogs"></pre>
-            </div>
-            
         </div>
     </div>
 
     <!-- Load Leaflet Map JavaScript -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     
-    <!-- We are NOT adding leaflet-curve.min.js, as requested -->
-
     <!-- Inject PHP data into a global JS object -->
     <script>
         window.siemData = {
             homeLocation: <?php echo $home_location_json; ?>,
             realEvents: <?php echo $event_data_json; ?>,
-            simEvents: <?php echo $sim_event_data_json; ?>,
+            simEvents: <?php echo $sim_event_data_json; ?>, // Now correctly passing processed sim data
             mostCommonCountry: <?php echo json_encode($most_common_country); ?>,
             severityMap: <?php echo $severity_map_json; ?> 
         };
@@ -582,3 +689,4 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
     <script src="map.js"></script>
 </body>
 </html>
+

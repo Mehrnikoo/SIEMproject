@@ -9,7 +9,37 @@
             "sim-log-entry-1: [SIMULATION] Brute Force SSH from 103.207.200.10 targeting 10.50.7.20",
             "sim-log-entry-2: Action: BLOCKED"
         ],
-        "simulated": true
+        "simulated": true,
+        "simulated_hops": [
+            {
+                "ip": "103.207.200.10",
+                "lat": 39.9042,
+                "lon": 116.4074,
+                "city": "Beijing",
+                "country": "China"
+            },
+            {
+                "ip": "202.97.12.1",
+                "lat": 31.2304,
+                "lon": 121.4737,
+                "city": "Shanghai",
+                "country": "China"
+            },
+            {
+                "ip": "138.197.250.1",
+                "lat": 37.3382,
+                "lon": -121.8863,
+                "city": "San Jose",
+                "country": "United States"
+            },
+            {
+                "ip": "72.14.200.1",
+                "lat": 41.8781,
+                "lon": -87.6298,
+                "city": "Chicago",
+                "country": "United States"
+            }
+        ]
     },
     {
         "id": 1001,
@@ -21,7 +51,37 @@
             "sim-log-entry-1: [SIMULATION] SQL Injection Attempt from 45.141.215.118 targeting 10.50.7.20",
             "sim-log-entry-2: Action: BLOCKED"
         ],
-        "simulated": true
+        "simulated": true,
+        "simulated_hops": [
+            {
+                "ip": "45.141.215.118",
+                "lat": 55.7558,
+                "lon": 37.6173,
+                "city": "Moscow",
+                "country": "Russia"
+            },
+            {
+                "ip": "87.250.250.242",
+                "lat": 59.9311,
+                "lon": 30.3609,
+                "city": "Saint Petersburg",
+                "country": "Russia"
+            },
+            {
+                "ip": "195.201.10.1",
+                "lat": 52.52,
+                "lon": 13.405,
+                "city": "Berlin",
+                "country": "Germany"
+            },
+            {
+                "ip": "8.8.8.8",
+                "lat": 37.4056,
+                "lon": -122.0775,
+                "city": "Mountain View",
+                "country": "United States"
+            }
+        ]
     },
     {
         "id": 1002,
@@ -33,7 +93,23 @@
             "sim-log-entry-1: [SIMULATION] Port Scan Detected from 198.51.100.12 targeting 10.50.7.20",
             "sim-log-entry-2: Action: BLOCKED"
         ],
-        "simulated": true
+        "simulated": true,
+        "simulated_hops": [
+            {
+                "ip": "176.113.115.155",
+                "lat": -23.5505,
+                "lon": -46.6333,
+                "city": "S\u00e3o Paulo",
+                "country": "Brazil"
+            },
+            {
+                "ip": "10.1.1.1",
+                "lat": 26.305,
+                "lon": -80.0664,
+                "city": "Boca Raton (Sim)",
+                "country": "United States"
+            }
+        ]
     },
     {
         "id": 1003,
@@ -45,7 +121,37 @@
             "sim-log-entry-1: [SIMULATION] Remote Control Attempt from 80.93.88.25 targeting 10.50.7.20",
             "sim-log-entry-2: Action: BLOCKED"
         ],
-        "simulated": true
+        "simulated": true,
+        "simulated_hops": [
+            {
+                "ip": "45.141.215.118",
+                "lat": 55.7558,
+                "lon": 37.6173,
+                "city": "Moscow",
+                "country": "Russia"
+            },
+            {
+                "ip": "87.250.250.242",
+                "lat": 59.9311,
+                "lon": 30.3609,
+                "city": "Saint Petersburg",
+                "country": "Russia"
+            },
+            {
+                "ip": "195.201.10.1",
+                "lat": 52.52,
+                "lon": 13.405,
+                "city": "Berlin",
+                "country": "Germany"
+            },
+            {
+                "ip": "8.8.8.8",
+                "lat": 37.4056,
+                "lon": -122.0775,
+                "city": "Mountain View",
+                "country": "United States"
+            }
+        ]
     },
     {
         "id": 1004,
@@ -57,6 +163,22 @@
             "sim-log-entry-1: [SIMULATION] Malware Download Signature from 176.113.115.155 targeting 10.50.7.20",
             "sim-log-entry-2: Action: BLOCKED"
         ],
-        "simulated": true
+        "simulated": true,
+        "simulated_hops": [
+            {
+                "ip": "176.113.115.155",
+                "lat": -23.5505,
+                "lon": -46.6333,
+                "city": "S\u00e3o Paulo",
+                "country": "Brazil"
+            },
+            {
+                "ip": "10.1.1.1",
+                "lat": 26.305,
+                "lon": -80.0664,
+                "city": "Boca Raton (Sim)",
+                "country": "United States"
+            }
+        ]
     }
 ]
