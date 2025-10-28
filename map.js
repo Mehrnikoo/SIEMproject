@@ -3,7 +3,8 @@
  * and draws animated CURVED attack lines on an HTML5 Canvas overlay.
  *
  * MODIFIED: Replaced the modal with a swappable "Details Panel."
- * MODIFIED: Traceroute animation now "hops" from node to node.
+ * MODIFIED: Traceroute animation now "hops" from node to node,
+ * drawing the marker AND the line one by one.
  */
 document.addEventListener('DOMContentLoaded', () => {
     // --- 1. DATA AND VARIABLE SETUP ---
@@ -24,12 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Global state for animation
     let dashOffset = 0;
     let currentEventsToDraw = [];
-    let currentTraceHops = [];
+    let currentTraceHops = []; // Will hold the FULL list of hops, including home
     
-    // --- NEW: Hop Animation State ---
+    // Hop Animation State
     let currentHopToAnimate = -1; // Index of the hop being animated. -1 means idle.
     let hopAnimationTimer = 0;
-    const HOP_ANIMATION_SPEED = 30; // Frames to wait before next hop (30 frames ≈ 0.5s)
+    const HOP_ANIMATION_SPEED = 45; // Frames to wait (45 frames ≈ 0.75s) - Slower
 
     // Layer and marker tracking
     let eventLayer = null;
@@ -92,10 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.height = mapContainer.clientHeight;
     }
 
-    /**
-     * --- MODIFIED: Added `isAnimated` parameter ---
-     * Can now draw a static line or an animated "marching ants" line.
-     */
     function drawQuadraticCurve(startPixel, endPixel, color, lineDash = [8, 12], lineWidth = 2.5, alpha = 0.8, isAnimated = true) {
         const x1 = startPixel.x;
         const y1 = startPixel.y;
@@ -118,7 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.globalAlpha = alpha;
         ctx.setLineDash(lineDash);
         
-        // Only use the moving dashOffset if the line is animated
         if (isAnimated) {
             ctx.lineDashOffset = dashOffset;
         } else {
@@ -130,17 +126,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * --- MODIFIED: The main animation loop ---
-     * Now includes logic for the hop-by-hop animation.
+     * Handles hop-by-hop animation timer and drawing.
      */
     function animate() {
-        // Update global "marching ants" offset
         dashOffset -= 0.2;
         if (dashOffset < -20) dashOffset = 0;
 
-        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // 1. Draw all main attack events (always animated)
+        // 1. Draw all main attack events
         currentEventsToDraw.forEach(event => {
             if (event.type === 'EXTERNAL' && event.lat !== null && event.lon !== null && (event.lat !== 0 || event.lon !== 0)) {
                 const startPixel = map.latLngToContainerPoint([event.lat, event.lon]);
@@ -150,13 +144,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 2. --- NEW: Draw the "hopping" traceroute path ---
+        // 2. Draw the "hopping" traceroute path
         if (currentTraceHops.length > 0 && currentHopToAnimate >= 0) {
             
             // This loop draws all the "settled" (finished) hops
+            // It loops up to currentHopToAnimate, drawing the path segment
             for (let i = 0; i < currentHopToAnimate; i++) {
                 const hopA = currentTraceHops[i];
-                const hopB = (i + 1 < currentTraceHops.length) ? currentTraceHops[i+1] : homeLocation;
+                const hopB = currentTraceHops[i+1];
                 
                 const startPixel = map.latLngToContainerPoint([hopA.lat, hopA.lon]);
                 const endPixel = map.latLngToContainerPoint([hopB.lat, hopB.lon]);
@@ -166,9 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // This draws the *current, active* hop
-            if (currentHopToAnimate < currentTraceHops.length) {
+            // (if the animation isn't finished)
+            if (currentHopToAnimate < currentTraceHops.length - 1) {
                 const hopA = currentTraceHops[currentHopToAnimate];
-                const hopB = (currentHopToAnimate + 1 < currentTraceHops.length) ? currentTraceHops[currentHopToAnimate + 1] : homeLocation;
+                const hopB = currentTraceHops[currentHopToAnimate + 1];
                 
                 const startPixel = map.latLngToContainerPoint([hopA.lat, hopA.lon]);
                 const endPixel = map.latLngToContainerPoint([hopB.lat, hopB.lon]);
@@ -177,13 +173,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 drawQuadraticCurve(startPixel, endPixel, '#0e7490', [5, 5], 3, 1.0, true);
             }
 
-            // 3. --- NEW: Update the hop animation timer ---
+            // 3. Update the hop animation timer
             // (Stops advancing once the last hop is drawn)
-            if (currentHopToAnimate < currentTraceHops.length) {
+            if (currentHopToAnimate < currentTraceHops.length - 1) {
                 hopAnimationTimer++;
                 if (hopAnimationTimer > HOP_ANIMATION_SPEED) {
-                    currentHopToAnimate++;
+                    currentHopToAnimate++; // Move to the next hop
                     hopAnimationTimer = 0;
+                    
+                    // --- NEW: Draw the NEXT hop marker ---
+                    // This is the "one-by-one" logic
+                    drawHopMarker(currentHopToAnimate); 
                 }
             }
         }
@@ -277,9 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 5. PANEL MANAGEMENT & TRACE LOGIC ---
 
-    /**
-     * Hides Event List, Shows Details Panel
-     */
     function showDetailsPanel(event) {
         currentEventForTrace = event;
         eventListContainer.style.display = 'none';
@@ -307,9 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    /**
-     * Hides Details Panel, Shows Event List
-     */
     function showEventListPanel() {
         detailsPanelContainer.style.display = 'none';
         eventListContainer.style.display = 'flex';
@@ -317,9 +311,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentEventForTrace = null;
     }
     
-    /**
-     * Handles the Trace Route button click
-     */
     async function handleTraceRoute() {
         if (!currentEventForTrace) return;
 
@@ -334,7 +325,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('[DEBUG] This is a SIMULATED event. Using pre-canned hops.');
             traceStatus.textContent = 'Simulating trace...';
             
-            // --- MODIFIED: Just call drawTracePath, animation loop handles the rest ---
             drawTracePath(currentEventForTrace.simulated_hops);
             
             traceStatus.textContent = `Simulated trace for ${currentEventForTrace.simulated_hops.length} hops.`;
@@ -356,7 +346,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.error) throw new Error(data.error);
 
             if (data.hops && data.hops.length > 0) {
-                // --- MODIFIED: Just call drawTracePath, animation loop handles the rest ---
                 drawTracePath(data.hops);
                 traceStatus.textContent = `Trace complete. Found ${data.hops.length} public hops.`;
                 traceRouteButton.textContent = 'Trace Complete';
@@ -374,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * --- MODIFIED: Clears trace data AND resets animation timers ---
+     * Clears trace data AND resets animation
      */
     function clearTraceRoute() {
         currentTraceHops = [];
@@ -382,21 +371,67 @@ document.addEventListener('DOMContentLoaded', () => {
         if (traceHopList) {
             traceHopList.innerHTML = '';
         }
-        // --- NEW: Reset animation state ---
         currentHopToAnimate = -1;
         hopAnimationTimer = 0;
     }
 
     /**
+     * --- NEW: Draws a SINGLE hop marker on the map ---
+     * This is called by the animation loop timer.
+     */
+    function drawHopMarker(hopIndex) {
+        let hop, isFirst, isHome, popupText;
+        
+        // Determine which hop to draw
+        if (hopIndex === 0) {
+            // This is the first hop (the attacker)
+            hop = currentTraceHops[0];
+            isFirst = true;
+            isHome = false;
+            popupText = `<strong>Hop 1 (Attacker)</strong><br><small>IP: ${hop.ip}</small><br><small>Location: ${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</small>`;
+        
+        } else if (hopIndex < currentTraceHops.length - 1) {
+            // This is a middle hop
+            hop = currentTraceHops[hopIndex];
+            isFirst = false;
+            isHome = false;
+            popupText = `<strong>Hop ${hopIndex + 1}</strong><br><small>IP: ${hop.ip}</small><br><small>Location: ${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</small>`;
+        
+        } else if (hopIndex === currentTraceHops.length - 1) {
+            // This is the LAST hop (our home)
+            hop = currentTraceHops[hopIndex]; // This is the homeLocation object
+            isFirst = false;
+            isHome = true;
+            popupText = `<strong>Server Location (Hop ${hopIndex + 1})</strong><br><small>Public IP: ${hop.ip}</small><br><small>Location: ${hop.city}, ${hop.country}</small>`;
+        } else {
+            return; // Invalid index
+        }
+
+        // Draw the marker
+        const marker = L.circleMarker([hop.lat, hop.lon], {
+            radius: isFirst || isHome ? 7 : 4,
+            fillColor: isFirst ? '#ef4444' : (isHome ? '#38bdf8' : '#0e7490'),
+            color: '#fff',
+            weight: isFirst || isHome ? 2 : 1,
+            opacity: 1,
+            fillOpacity: 0.9
+        }).addTo(traceLayer).bindPopup(
+            `<div style="font-family: 'Inter', sans-serif; color: #1e293b;">${popupText}</div>`
+        );
+        
+        // Automatically open the popup for the new hop
+        marker.openPopup();
+    }
+
+
+    /**
      * --- MODIFIED: Populates data and STARTS the hop animation ---
+     * This function NO LONGER draws markers itself.
      */
     function drawTracePath(hops) {
         clearTraceRoute();
-        currentTraceHops = hops;
-        traceHopList.innerHTML = ''; // Clear previous list
-
+        
         // Add our home location to the list of hops for the animation
-        // We'll add it to the markers list *later*
         const allHopsForAnim = [
             ...hops,
             { 
@@ -410,29 +445,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         currentTraceHops = allHopsForAnim;
 
-
-        // Draw markers on Leaflet
+        // Populate the TEXT list in the side panel
         hops.forEach((hop, index) => {
-            const hopCoords = [hop.lat, hop.lon];
-            const isFirst = index === 0;
-            
-            const marker = L.circleMarker(hopCoords, {
-                radius: isFirst ? 7 : 4,
-                fillColor: isFirst ? '#ef4444' : '#0e7490',
-                color: '#fff',
-                weight: isFirst ? 2 : 1,
-                opacity: 1,
-                fillOpacity: 0.9
-            }).addTo(traceLayer).bindPopup(
-                `<div style="font-family: 'Inter', sans-serif; color: #1e293b;">` +
-                `<strong>Hop ${index + 1}${isFirst ? ' (Attacker)' : ''}</strong><br>` +
-                `<small>IP: ${hop.ip}</small><br>` +
-                `<small>Location: ${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</small>` +
-                `</div>`
-            );
-            if (isFirst) marker.openPopup();
-
-            // Add hop to the list panel
             const hopDiv = document.createElement('div');
             hopDiv.innerHTML = `
                 <strong>Hop ${index + 1}:</strong> 
@@ -441,19 +455,6 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             traceHopList.appendChild(hopDiv);
         });
-
-        // Add home server to trace layer
-        L.circleMarker(homeCoords, {
-            radius: 7, fillColor: '#38bdf8', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
-        }).addTo(traceLayer).bindPopup(
-            `<div style="font-family: 'Inter', sans-serif; text-align: center; color: #1e293b;">` +
-            `<strong>Server Location (Hop ${hops.length + 1})</strong><br>` +
-            `${homeLocation.city}, ${homeLocation.country}<br>` +
-            `<small>Public IP: ${homeLocation.ip}</small>` +
-            `</div>`
-        );
-        
-        // Add home to the list panel
         const homeDiv = document.createElement('div');
         homeDiv.innerHTML = `
             <strong>Hop ${hops.length + 1}:</strong> 
@@ -463,6 +464,9 @@ document.addEventListener('DOMContentLoaded', () => {
         traceHopList.appendChild(homeDiv);
 
         // --- NEW: Kick off the animation ---
+        // 1. Draw the VERY FIRST marker (the attacker) immediately.
+        drawHopMarker(0); 
+        // 2. Set the stepper to start animating from hop 0.
         currentHopToAnimate = 0;
         hopAnimationTimer = 0;
     }

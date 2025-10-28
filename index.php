@@ -87,7 +87,6 @@ $real_events_raw = json_decode($log_data_raw, true) ?: [];
 
 // Load SIMULATED events from sim_data.json
 $sim_data_raw = @file_get_contents('sim_data.json');
-// --- THIS LINE IS NOW CORRECT ---
 $sim_events_raw = json_decode($sim_data_raw, true) ?: [];
 
 if (empty($real_events_raw) && empty($sim_events_raw)) {
@@ -223,7 +222,6 @@ if ($home_data_raw !== false) {
 
 // --- Variables for HTML/JS injection ---
 $event_data_json = json_encode($real_event_data);
-// --- THIS LINE IS NOW CORRECT ---
 $sim_event_data_json = json_encode($sim_event_data);
 $home_location_json = json_encode($home_location_data);
 $severity_map_json = json_encode($severity_map);
@@ -235,10 +233,19 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web SIEM Geolocation Dashboard</title>
+    
+    <!-- --- NEW: LCP Optimization --- -->
+    <!-- Tells the browser to resolve the map tile domain's IP address ASAP -->
+    <link rel="dns-prefetch" href="https://tiles.stadiamaps.com">
+    
+    <!-- Load Inter Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    
+    <!-- Load Leaflet Map CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    
     <style>
         /* General Styles */
         body {
@@ -633,7 +640,7 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
                     <h2 style="color: #cbd5e1; margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid #334155; padding-bottom: 10px;">Security Event Stream</h2>
                     <div id="eventList">
                         <?php if ($data_error): ?>
-                             <p style="text-align: center; color: #fecaca; margin-top: 40px;"><?php echo htmlspecialchars($data_error); ?></p>
+                             <p style="text-align: center; color: #fca5a5; margin-top: 40px;"><?php echo htmlspecialchars($data_error); ?></p>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -679,7 +686,7 @@ $total_all_events = count($real_event_data); // Summary bar always shows REAL ev
         window.siemData = {
             homeLocation: <?php echo $home_location_json; ?>,
             realEvents: <?php echo $event_data_json; ?>,
-            simEvents: <?php echo $sim_event_data_json; ?>, // Now correctly passing processed sim data
+            simEvents: <?php echo $sim_event_data_json; ?>,
             mostCommonCountry: <?php echo json_encode($most_common_country); ?>,
             severityMap: <?php echo $severity_map_json; ?> 
         };
