@@ -40,7 +40,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Panel Management Elements
     const eventListContainer = document.getElementById('eventListContainer');
     const detailsPanelContainer = document.getElementById('detailsPanelContainer');
+    const whoisPanelContainer = document.getElementById('whoisPanelContainer');
     const backToEventsButton = document.getElementById('backToEventsButton');
+    const backToEventsFromWhoisButton = document.getElementById('backToEventsFromWhoisButton');
     
     // Details Panel Elements
     const detailsDescription = document.getElementById('detailsDescription');
@@ -50,7 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const traceStatus = document.getElementById('trace-status');
     const traceHopList = document.getElementById('trace-hop-list');
     
+    // Whois Panel Elements
+    const ipSearchInput = document.getElementById('ipSearchInput');
+    const ipSearchButton = document.getElementById('ipSearchButton');
+    const whoisLoading = document.getElementById('whoisLoading');
+    const whoisError = document.getElementById('whoisError');
+    const whoisInfoGrid = document.getElementById('whoisInfoGrid');
+    
     let currentEventForTrace = null; // Store the selected event
+    let whoisMarker = null; // Store marker for searched IP
 
     // --- 2. LEAFLET MAP INITIALIZATION ---
     const map = L.map('map', {
@@ -306,9 +316,208 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showEventListPanel() {
         detailsPanelContainer.style.display = 'none';
+        whoisPanelContainer.style.display = 'none';
         eventListContainer.style.display = 'flex';
         clearTraceRoute();
+        clearWhoisMarker();
         currentEventForTrace = null;
+    }
+    
+    function showWhoisPanel() {
+        eventListContainer.style.display = 'none';
+        detailsPanelContainer.style.display = 'none';
+        whoisPanelContainer.style.display = 'flex';
+        clearTraceRoute();
+    }
+    
+    function clearWhoisMarker() {
+        if (whoisMarker) {
+            map.removeLayer(whoisMarker);
+            whoisMarker = null;
+        }
+    }
+    
+    async function handleWhoisLookup() {
+        const ip = ipSearchInput.value.trim();
+        
+        if (!ip) {
+            alert('Please enter an IP address');
+            return;
+        }
+        
+        // Basic IP validation
+        const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+        if (!ipRegex.test(ip)) {
+            alert('Please enter a valid IP address');
+            return;
+        }
+        
+        // Show loading state
+        showWhoisPanel();
+        whoisLoading.style.display = 'block';
+        whoisError.style.display = 'none';
+        whoisInfoGrid.style.display = 'none';
+        ipSearchButton.disabled = true;
+        ipSearchButton.textContent = 'Searching...';
+        
+        try {
+            const response = await fetch(`index.php?action=whois&ip=${encodeURIComponent(ip)}`);
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // Display the results
+            displayWhoisInfo(data);
+            
+            // Add marker to map if coordinates are available
+            if (data.lat && data.lon && (data.lat !== 0 || data.lon !== 0)) {
+                clearWhoisMarker();
+                whoisMarker = L.circleMarker([data.lat, data.lon], {
+                    radius: 8,
+                    fillColor: '#fbbf24',
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.9
+                }).addTo(map).bindPopup(
+                    `<div style="font-family: 'Inter', sans-serif; color: #1e293b;">` +
+                    `<strong>IP Lookup: ${data.ip}</strong><br>` +
+                    `${data.city || 'Unknown'}, ${data.country || 'Unknown'}<br>` +
+                    `<small>ISP: ${data.isp || 'Unknown'}</small><br>` +
+                    `<small>Org: ${data.org || 'Unknown'}</small>` +
+                    `</div>`
+                ).openPopup();
+                
+                // Fly to the location
+                map.flyTo([data.lat, data.lon], 6, {duration: 1.0});
+            }
+            
+        } catch (error) {
+            console.error('Whois lookup failed:', error);
+            whoisLoading.style.display = 'none';
+            whoisError.style.display = 'block';
+            whoisError.textContent = `Error: ${error.message}`;
+        } finally {
+            ipSearchButton.disabled = false;
+            ipSearchButton.textContent = 'Whois Lookup';
+        }
+    }
+    
+    function displayWhoisInfo(data) {
+        whoisLoading.style.display = 'none';
+        whoisError.style.display = 'none';
+        whoisInfoGrid.style.display = 'grid';
+        whoisInfoGrid.innerHTML = '';
+        
+        // Helper function to create info item
+        function createInfoItem(label, value, isIP = false) {
+            if (value === null || value === undefined || value === '') return null;
+            
+            const item = document.createElement('div');
+            item.className = 'whois-info-item';
+            const labelEl = document.createElement('label');
+            labelEl.textContent = label;
+            const valueEl = document.createElement('div');
+            valueEl.className = 'value' + (isIP ? ' ip-address' : '');
+            valueEl.textContent = value;
+            item.appendChild(labelEl);
+            item.appendChild(valueEl);
+            return item;
+        }
+        
+        // IP Address
+        if (data.ip) {
+            const item = createInfoItem('IP Address', data.ip, true);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Location Information
+        const locationParts = [];
+        if (data.city && data.city !== 'Unknown') locationParts.push(data.city);
+        if (data.regionName) locationParts.push(data.regionName);
+        if (data.country && data.country !== 'Unknown') locationParts.push(data.country);
+        if (locationParts.length > 0) {
+            const item = createInfoItem('Location', locationParts.join(', '));
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        if (data.zip) {
+            const item = createInfoItem('ZIP Code', data.zip);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        if (data.district) {
+            const item = createInfoItem('District', data.district);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Coordinates
+        if (data.lat && data.lon && (data.lat !== 0 || data.lon !== 0)) {
+            const item = createInfoItem('Coordinates', `${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}`);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Network Information
+        if (data.isp && data.isp !== 'Unknown') {
+            const item = createInfoItem('ISP', data.isp);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        if (data.org && data.org !== 'Unknown') {
+            const item = createInfoItem('Organization', data.org);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        if (data.as && data.as !== 'N/A') {
+            const item = createInfoItem('AS Number', data.as);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        if (data.asname && data.asname !== 'N/A') {
+            const item = createInfoItem('AS Name', data.asname);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Timezone
+        if (data.timezone && data.timezone !== 'Unknown') {
+            const timezoneStr = data.timezone + (data.offset ? ` (UTC${data.offset >= 0 ? '+' : ''}${data.offset / 3600})` : '');
+            const item = createInfoItem('Timezone', timezoneStr);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Continent
+        if (data.continent && data.continent !== 'Unknown') {
+            const item = createInfoItem('Continent', data.continent);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Reverse DNS
+        if (data.reverse) {
+            const item = createInfoItem('Reverse DNS', data.reverse);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Flags
+        const flags = [];
+        if (data.mobile) flags.push('Mobile');
+        if (data.proxy) flags.push('Proxy');
+        if (data.hosting) flags.push('Hosting');
+        if (data.status === 'private') flags.push('Private IP');
+        
+        if (flags.length > 0) {
+            const item = createInfoItem('Flags', flags.join(', '));
+            if (item) whoisInfoGrid.appendChild(item);
+        }
+        
+        // Currency (if available)
+        if (data.currency) {
+            const item = createInfoItem('Currency', data.currency);
+            if (item) whoisInfoGrid.appendChild(item);
+        }
     }
     
     async function handleTraceRoute() {
@@ -479,6 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setActiveTab(showSim) {
         showEventListPanel();
+        clearWhoisMarker();
         if (showSim) {
             tabSim.classList.add('active');
             tabReal.classList.remove('active');
@@ -497,6 +707,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     traceRouteButton.addEventListener('click', handleTraceRoute);
     backToEventsButton.addEventListener('click', showEventListPanel);
+    backToEventsFromWhoisButton.addEventListener('click', showEventListPanel);
+    
+    // Whois lookup handlers
+    ipSearchButton.addEventListener('click', handleWhoisLookup);
+    ipSearchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            handleWhoisLookup();
+        }
+    });
 
     map.on('zoom move', animate);
     map.on('resize', resizeCanvas);
