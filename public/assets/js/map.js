@@ -214,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentEventsToDraw = list;
         if (!list) return;
         
+        // Draw markers for current list
         list.forEach(event => {
             if (event.type === 'EXTERNAL' && event.lat !== null && event.lon !== null && (event.lat !== 0 || event.lon !== 0)) {
                 const attackCoords = [event.lat, event.lon];
@@ -238,6 +239,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Sorting logic ---
+    const eventSortSelect = document.getElementById('eventSortSelect');
+    let currentSortMode = 'severity_desc';
+
+    const severityOrderDesc = { 'Critical': 4, 'High': 3, 'Medium': 2, 'Low': 1 };
+    const severityOrderAsc =   { 'Low': 1, 'Medium': 2, 'High': 3, 'Critical': 4 };
+
+    function getEventTimestamp(event) {
+        // Support multiple potential timestamp fields; fallback to id for ordering
+        const ts = event.timestamp || event.time || event.date || event.datetime || null;
+        if (typeof ts === 'number') return ts;
+        if (typeof ts === 'string') {
+            const d = Date.parse(ts);
+            if (!Number.isNaN(d)) return d;
+        }
+        // Fallback: assume larger id == newer event
+        return typeof event.id === 'number' ? event.id : 0;
+    }
+
+    function sortEvents(list, mode) {
+        const copy = (list || []).slice();
+        if (mode === 'severity_desc') {
+            copy.sort((a, b) => (severityOrderDesc[b.severity]||0) - (severityOrderDesc[a.severity]||0) || getEventTimestamp(b) - getEventTimestamp(a));
+        } else if (mode === 'severity_asc') {
+            copy.sort((a, b) => (severityOrderAsc[a.severity]||0) - (severityOrderAsc[b.severity]||0) || getEventTimestamp(a) - getEventTimestamp(b));
+        } else if (mode === 'date_desc') {
+            copy.sort((a, b) => getEventTimestamp(b) - getEventTimestamp(a));
+        } else if (mode === 'date_asc') {
+            copy.sort((a, b) => getEventTimestamp(a) - getEventTimestamp(b));
+        }
+        return copy;
+    }
+
+    function refreshCurrentList() {
+        const showSim = tabSim.classList.contains('active');
+        const list = showSim ? simEvents : realEvents;
+        const sorted = sortEvents(list, currentSortMode);
+        renderEvents(sorted);
+        populateEventList(sorted);
+    }
+
+    if (eventSortSelect) {
+        eventSortSelect.addEventListener('change', () => {
+            currentSortMode = eventSortSelect.value;
+            refreshCurrentList();
+        });
+    }
+
     function populateEventList(list) {
         const container = document.getElementById('eventList');
         container.innerHTML = '';
@@ -247,7 +296,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        list.forEach(event => {
+        // Ensure list respects current sort when rendering
+        const displayList = sortEvents(list, currentSortMode);
+
+        displayList.forEach(event => {
             const item = document.createElement('div');
             item.className = 'event-item';
             const severityColor = severityMap[event.severity] || '#777';
@@ -258,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
             details.className = 'details';
             const strong = document.createElement('strong');
             strong.textContent = event.description;
+
             const loc = document.createElement('span');
             loc.className = 'location';
             let locHTML = `Source: ${event.ip} `;
@@ -267,8 +320,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 locHTML += `<span class="target">| Target: ${event.target_device} (Local)</span>`;
             }
             loc.innerHTML = locHTML;
+
+            // Date line
+            const when = document.createElement('span');
+            when.className = 'location';
+            const tsMs = getEventTimestamp(event);
+            if (tsMs) {
+                const d = new Date(tsMs);
+                when.innerHTML = `<span style="color:#64748b;">Date: ${d.toLocaleString()}</span>`;
+            } else {
+                when.innerHTML = `<span style="color:#64748b;">Date: Unknown</span>`;
+            }
+
             details.appendChild(strong);
             details.appendChild(loc);
+            details.appendChild(when);
             const tag = document.createElement('span');
             tag.className = 'severity-tag';
             tag.style.backgroundColor = severityColor;
@@ -692,13 +758,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (showSim) {
             tabSim.classList.add('active');
             tabReal.classList.remove('active');
-            renderEvents(simEvents);
-            populateEventList(simEvents);
+            refreshCurrentList();
         } else {
             tabReal.classList.add('active');
             tabSim.classList.remove('active');
-            renderEvents(realEvents);
-            populateEventList(realEvents);
+            refreshCurrentList();
         }
     }
 
@@ -724,5 +788,66 @@ document.addEventListener('DOMContentLoaded', () => {
     resizeCanvas();
     setActiveTab(false);
     animate();
+
+    // --- 7. REAL EVENTS POLLING & NOTIFICATIONS ---
+    const knownRealEventIds = new Set((realEvents || []).map(e => e.id).filter(id => id !== undefined && id !== null));
+
+    // Ask for notification permission once
+    if ('Notification' in window && Notification.permission === 'default') {
+        try { Notification.requestPermission(); } catch (_) {}
+    }
+
+    function playAlertSound() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 tone
+            gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            oscillator.connect(gain).connect(audioCtx.destination);
+            oscillator.start();
+            // Quick envelope
+            gain.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.35);
+            oscillator.stop(audioCtx.currentTime + 0.4);
+        } catch (e) {
+            // Ignore sound errors
+        }
+    }
+
+    function showBrowserNotification(title, body) {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') {
+            new Notification(title, { body });
+        }
+    }
+
+    async function pollRealEvents() {
+        try {
+            const res = await fetch('index.php?action=real_events_summary', { cache: 'no-store' });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data || !Array.isArray(data.ids)) return;
+
+            // Find newly observed IDs
+            const newIds = data.ids.filter(id => !knownRealEventIds.has(id));
+            if (newIds.length > 0) {
+                // Update known IDs
+                newIds.forEach(id => knownRealEventIds.add(id));
+
+                // Alert user
+                playAlertSound();
+                const title = 'New Security Event' + (newIds.length > 1 ? 's' : '');
+                const body = `${newIds.length} new event${newIds.length > 1 ? 's' : ''} detected in Real Events.`;
+                showBrowserNotification(title, body);
+            }
+        } catch (_) {
+            // Ignore polling errors
+        }
+    }
+
+    // Start polling every 10 seconds
+    setInterval(pollRealEvents, 10000);
 });
 

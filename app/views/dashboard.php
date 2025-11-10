@@ -541,10 +541,21 @@ $severity_map_json = json_encode($severity_map);
 
                 <!-- Panel 1: Event Stream (Visible by default) -->
                 <div class="event-list-container" id="eventListContainer">
-                    <h2 style="color: #cbd5e1; margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid #334155; padding-bottom: 10px;">Security Event Stream</h2>
+                    <h2 style="color: #cbd5e1; margin-top: 0; font-size: 1.25rem; border-bottom: 1px solid #334155; padding-bottom: 10px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                        <span>Security Event Stream</span>
+                        <span style="display:flex; align-items:center; gap:8px;">
+                            <label for="eventSortSelect" style="color:#94a3b8; font-size:0.9rem;">Sort by</label>
+                            <select id="eventSortSelect" style="background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:6px 8px; font-family:'Inter', sans-serif;">
+                                <option value="severity_desc">Severity (High → Low)</option>
+                                <option value="severity_asc">Severity (Low → High)</option>
+                                <option value="date_desc">Date (Newest First)</option>
+                                <option value="date_asc">Date (Oldest First)</option>
+                            </select>
+                        </span>
+                    </h2>
                     <div id="eventList">
                         <?php if ($data_error): ?>
-                             <p style="text-align: center; color: #fca5a5; margin-top: 40px;"><?php echo View::escape($data_error); ?></p>
+                             <p style="text-align: center; color: #fca5a5; margin-top: 40px;">&nbsp;<?php echo View::escape($data_error); ?></p>
                         <?php endif; ?>
                     </div>
                 </div>

@@ -80,7 +80,8 @@ def detect_real_events(lines):
             'severity': severity,
             'description': desc,
             'raw_logs': sample_lines[:5], # Keep it brief
-            'simulated': False
+            'simulated': False,
+            'timestamp': datetime.now().isoformat()
         }
         next_id += 1
         return event
@@ -148,7 +149,8 @@ def generate_simulated_events(start_id=1000):
             'description': full_desc,
             'raw_logs': raw_logs,
             'simulated': True,
-            'simulated_hops': path # --- NEW: Added the hop data ---
+            'simulated_hops': path, # --- NEW: Added the hop data ---
+            'timestamp': datetime.now().isoformat()
         })
     return events
 

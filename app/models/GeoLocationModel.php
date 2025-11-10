@@ -167,7 +167,8 @@ class GeoLocationModel {
                 'description' => $event['description'] ?? '',
                 'raw_logs' => $event['raw_logs'] ?? [],
                 'simulated' => $event['simulated'] ?? false,
-                'simulated_hops' => $event['simulated_hops'] ?? []
+                'simulated_hops' => $event['simulated_hops'] ?? [],
+                'timestamp' => $event['timestamp'] ?? date('c')
             ];
             
             // Geocode external IPs only

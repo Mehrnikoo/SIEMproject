@@ -37,6 +37,7 @@ $tracerouteModel = new TracerouteModel();
 $dashboardController = new DashboardController($eventModel, $geoModel, $serverStatusModel, $config);
 $tracerouteController = new TracerouteController($tracerouteModel, $geoModel);
 $whoisController = new WhoisController($geoModel);
+$eventsController = new EventsController($eventModel);
 
 // Routing
 if (isset($_GET['action']) && $_GET['action'] === 'trace' && isset($_GET['ip'])) {
@@ -45,6 +46,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'trace' && isset($_GET['ip']))
 } elseif (isset($_GET['action']) && $_GET['action'] === 'whois' && isset($_GET['ip'])) {
     // Handle whois lookup API endpoint
     $whoisController->lookup($_GET['ip']);
+} elseif (isset($_GET['action']) && $_GET['action'] === 'real_events_summary') {
+    // Lightweight summary for polling new real events
+    $eventsController->realSummary();
 } else {
     // Default: show dashboard
     $dashboardController->index();
