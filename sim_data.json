@@ -2,11 +2,11 @@
     {
         "id": 1000,
         "source_ip": "103.207.200.10",
-        "target_ip": "10.50.7.79",
+        "target_ip": "10.50.4.164",
         "severity": "High",
         "description": "[SIMULATION] Brute Force SSH",
         "raw_logs": [
-            "sim-log-entry-1: [SIMULATION] Brute Force SSH from 103.207.200.10 targeting 10.50.7.79",
+            "sim-log-entry-1: [SIMULATION] Brute Force SSH from 103.207.200.10 targeting 10.50.4.164",
             "sim-log-entry-2: Action: BLOCKED"
         ],
         "simulated": true,
@@ -40,16 +40,16 @@
                 "country": "United States"
             }
         ],
-        "timestamp": "2025-11-10T11:50:58.801230"
+        "timestamp": "2025-11-15T13:33:17.110096"
     },
     {
         "id": 1001,
         "source_ip": "45.141.215.118",
-        "target_ip": "10.50.7.79",
+        "target_ip": "10.50.4.164",
         "severity": "Critical",
         "description": "[SIMULATION] SQL Injection Attempt",
         "raw_logs": [
-            "sim-log-entry-1: [SIMULATION] SQL Injection Attempt from 45.141.215.118 targeting 10.50.7.79",
+            "sim-log-entry-1: [SIMULATION] SQL Injection Attempt from 45.141.215.118 targeting 10.50.4.164",
             "sim-log-entry-2: Action: BLOCKED"
         ],
         "simulated": true,
@@ -83,16 +83,16 @@
                 "country": "United States"
             }
         ],
-        "timestamp": "2025-11-10T11:50:58.801242"
+        "timestamp": "2025-11-15T13:33:17.110250"
     },
     {
         "id": 1002,
         "source_ip": "198.51.100.12",
-        "target_ip": "10.50.7.79",
+        "target_ip": "10.50.4.164",
         "severity": "Medium",
         "description": "[SIMULATION] Port Scan Detected",
         "raw_logs": [
-            "sim-log-entry-1: [SIMULATION] Port Scan Detected from 198.51.100.12 targeting 10.50.7.79",
+            "sim-log-entry-1: [SIMULATION] Port Scan Detected from 198.51.100.12 targeting 10.50.4.164",
             "sim-log-entry-2: Action: BLOCKED"
         ],
         "simulated": true,
@@ -112,16 +112,16 @@
                 "country": "United States"
             }
         ],
-        "timestamp": "2025-11-10T11:50:58.801246"
+        "timestamp": "2025-11-15T13:33:17.110264"
     },
     {
         "id": 1003,
         "source_ip": "80.93.88.25",
-        "target_ip": "10.50.7.79",
+        "target_ip": "10.50.4.164",
         "severity": "Critical",
         "description": "[SIMULATION] Remote Control Attempt",
         "raw_logs": [
-            "sim-log-entry-1: [SIMULATION] Remote Control Attempt from 80.93.88.25 targeting 10.50.7.79",
+            "sim-log-entry-1: [SIMULATION] Remote Control Attempt from 80.93.88.25 targeting 10.50.4.164",
             "sim-log-entry-2: Action: BLOCKED"
         ],
         "simulated": true,
@@ -155,16 +155,16 @@
                 "country": "United States"
             }
         ],
-        "timestamp": "2025-11-10T11:50:58.801250"
+        "timestamp": "2025-11-15T13:33:17.110269"
     },
     {
         "id": 1004,
         "source_ip": "176.113.115.155",
-        "target_ip": "10.50.7.79",
+        "target_ip": "10.50.4.164",
         "severity": "High",
         "description": "[SIMULATION] Malware Download Signature",
         "raw_logs": [
-            "sim-log-entry-1: [SIMULATION] Malware Download Signature from 176.113.115.155 targeting 10.50.7.79",
+            "sim-log-entry-1: [SIMULATION] Malware Download Signature from 176.113.115.155 targeting 10.50.4.164",
             "sim-log-entry-2: Action: BLOCKED"
         ],
         "simulated": true,
@@ -184,6 +184,6 @@
                 "country": "United States"
             }
         ],
-        "timestamp": "2025-11-10T11:50:58.801253"
+        "timestamp": "2025-11-15T13:33:17.110276"
     }
 ]

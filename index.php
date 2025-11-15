@@ -38,12 +38,14 @@ $eventModel = new EventModel($config);
 $geoModel = new GeoLocationModel($config);
 $serverStatusModel = new ServerStatusModel($config);
 $tracerouteModel = new TracerouteModel();
+$logsModel = new LogsModel($config);
 
 // Initialize controllers
 $dashboardController = new DashboardController($eventModel, $geoModel, $serverStatusModel, $config);
 $tracerouteController = new TracerouteController($tracerouteModel, $geoModel);
 $whoisController = new WhoisController($geoModel);
 $eventsController = new EventsController($eventModel);
+$logsController = new LogsController($logsModel);
 
 // Routing - SECURITY: Sanitize and validate inputs
 $action = isset($_GET['action']) ? trim($_GET['action']) : '';
@@ -59,6 +61,9 @@ if ($action === 'trace' && !empty($ip)) {
 } elseif ($action === 'real_events_summary') {
     // Lightweight summary for polling new real events
     $eventsController->realSummary();
+} elseif ($action === 'logs') {
+    // Handle logs viewer page
+    $logsController->index();
 } else {
     // Default: show dashboard
     $dashboardController->index();

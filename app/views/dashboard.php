@@ -486,7 +486,12 @@ $severity_map_json = json_encode($severity_map);
 <body>
 
     <div class="container">
-        <h1>Web-Based SIEM Geolocation Dashboard</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1>Web-Based SIEM Geolocation Dashboard</h1>
+            <a href="index.php?action=logs" style="display: inline-block; padding: 10px 20px; background-color: #0e7490; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: background-color 0.2s;">
+                📋 View Logs
+            </a>
+        </div>
 
         <div class="summary-bar">
             <!-- Monitored Network Status (Home Location) -->

@@ -14,6 +14,8 @@ LOG_PATHS = [
     '/var/log/auth.log',
     '/var/log/secure',
     '/var/log/syslog',
+    '/var/log/kern.log',  # Kernel logs (traffic/network)
+    '/var/log/messages',  # System messages
     './application.log' # Local fallback
 ]
 TAIL_READ_BYTES = 200_000
@@ -47,6 +49,44 @@ def tail_bytes(path, num_bytes=TAIL_READ_BYTES):
 
 def extract_ips(line):
     return re.findall(r'(?:\d{1,3}\.){3}\d{1,3}', line)
+
+def parse_log_timestamp(line):
+    """Extract timestamp from log line if available."""
+    # Common syslog format: Jan 10 12:34:56
+    # ISO format: 2024-01-10T12:34:56
+    # Try various timestamp patterns
+    patterns = [
+        r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})',  # ISO format
+        r'([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})',  # Syslog format
+        r'(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})',  # Date format
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, line)
+        if match:
+            return match.group(1)
+    return None
+
+def extract_log_type(line):
+    """Determine log type/category."""
+    line_lower = line.lower()
+    if any(x in line_lower for x in ['failed password', 'authentication failure', 'invalid user']):
+        return 'Authentication'
+    elif any(x in line_lower for x in ['connection', 'connect', 'disconnect']):
+        return 'Connection'
+    elif any(x in line_lower for x in ['iptables', 'firewall', 'dropped', 'blocked', 'denied']):
+        return 'Firewall'
+    elif any(x in line_lower for x in ['interface', 'link', 'network', 'eth', 'wlan']):
+        return 'Network'
+    elif any(x in line_lower for x in ['sql', 'injection', 'union select']):
+        return 'SQL Injection'
+    elif any(x in line_lower for x in ['port', 'scan', 'nmap']):
+        return 'Port Scan'
+    elif any(x in line_lower for x in ['http', 'https', 'get', 'post', 'request']):
+        return 'HTTP'
+    elif any(x in line_lower for x in ['kernel', 'system', 'error']):
+        return 'System'
+    else:
+        return 'Other'
 
 def detect_real_events(lines):
     """Scan provided lines and extract real suspicious events."""
@@ -196,6 +236,43 @@ def main():
         print(f"Wrote {len(sim_events)} simulated events to sim_data.json")
     except Exception as e:
         print(f"Error: could not write sim_data.json: {e}")
+
+    # 4. Extract ALL raw logs with details for logs viewer
+    all_raw_logs = []
+    log_id = 1
+    print("Extracting all raw logs with details...")
+    for path in LOG_PATHS:
+        if os.path.exists(path):
+            lines = tail_bytes(path)
+            for line in lines:
+                if line.strip():  # Skip empty lines
+                    log_entry = {
+                        'id': log_id,
+                        'log_file': os.path.basename(path),
+                        'log_path': path,
+                        'raw_line': line.strip(),
+                        'log_type': extract_log_type(line),
+                        'timestamp': parse_log_timestamp(line) or datetime.now().isoformat(),
+                        'extracted_at': datetime.now().isoformat()
+                    }
+                    # Extract IPs if present
+                    ips = extract_ips(line)
+                    if ips:
+                        log_entry['source_ip'] = ips[0]
+                        if len(ips) > 1:
+                            log_entry['destination_ip'] = ips[1]
+                    all_raw_logs.append(log_entry)
+                    log_id += 1
+    
+    # Sort by timestamp (newest first)
+    all_raw_logs.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    try:
+        with open('raw_logs.json', 'w') as f:
+            json.dump(all_raw_logs, f, indent=2)
+        print(f"Wrote {len(all_raw_logs)} raw log entries to raw_logs.json")
+    except Exception as e:
+        print(f"Error: could not write raw_logs.json: {e}")
 
 if __name__ == '__main__':
     main()

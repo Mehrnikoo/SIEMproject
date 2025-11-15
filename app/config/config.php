@@ -14,6 +14,7 @@ return [
         'log_data' => __DIR__ . '/../../log_data.json',
         'sim_data' => __DIR__ . '/../../sim_data.json',
         'server_status' => __DIR__ . '/../../server_status.json',
+        'raw_logs' => __DIR__ . '/../../raw_logs.json',
     ],
     'geo_api' => 'http://ip-api.com/json/',
     'public_ip_service' => 'https://api.ipify.org',
