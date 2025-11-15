@@ -5,18 +5,42 @@
 class TracerouteModel {
     
     /**
-     * Validate IP address (must be public)
+     * Validate IP address (must be public) - SECURITY: Strict validation
      */
     public function validateIP($ip) {
-        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+        // SECURITY: Ensure input is a string and not empty
+        if (!is_string($ip) || empty(trim($ip))) {
+            return false;
+        }
+        
+        // SECURITY: Remove any whitespace
+        $ip = trim($ip);
+        
+        // SECURITY: Validate IP format strictly (must be public)
+        $valid = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+        
+        // SECURITY: Additional check - ensure it's exactly an IP (no extra characters)
+        if ($valid && $ip === filter_var($ip, FILTER_VALIDATE_IP)) {
+            return true;
+        }
+        
+        return false;
     }
     
     /**
-     * Execute traceroute command
+     * Execute traceroute command - SECURITY: Protected against command injection
      */
     public function executeTraceroute($ip) {
+        // SECURITY: Validate IP before using it in command
+        if (!$this->validateIP($ip)) {
+            return '';
+        }
+        
+        // SECURITY: Use escapeshellarg to prevent command injection
         $safe_ip = escapeshellarg($ip);
-        $command = "traceroute -I -n -w 1 -q 1 -m 20 $safe_ip 2>&1";
+        
+        // SECURITY: Use absolute path and limit command options
+        $command = "/usr/bin/traceroute -I -n -w 1 -q 1 -m 20 $safe_ip 2>&1";
         $output = @shell_exec($command);
         
         // Try Windows tracert if Linux traceroute fails

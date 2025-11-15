@@ -12,9 +12,19 @@ class TracerouteController {
     }
     
     /**
-     * Handle traceroute request
+     * Handle traceroute request - SECURITY: Input validation and sanitization
      */
     public function trace($ip) {
+        // SECURITY: Ensure input is a string
+        if (!is_string($ip)) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid input type.']);
+            exit;
+        }
+        
+        // SECURITY: Trim and validate IP
+        $ip = trim($ip);
+        
         // Validate IP
         if (!$this->tracerouteModel->validateIP($ip)) {
             header('Content-Type: application/json');

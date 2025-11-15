@@ -6,6 +6,15 @@
  * MODIFIED: Traceroute animation now "hops" from node to node,
  * drawing the marker AND the line one by one.
  */
+
+// --- SECURITY: HTML Escaping Function ---
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- 1. DATA AND VARIABLE SETUP ---
     const siemData = window.siemData || {};
@@ -89,9 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }).addTo(eventLayer).bindPopup(
                 `<div style="font-family: 'Inter', sans-serif; text-align: center; color: #1e293b;">` +
                 `<strong>Server Location</strong><br>` +
-                `${homeLocation.city}, ${homeLocation.country}<br>` +
-                `<small>Public IP: ${homeLocation.ip}</small><br>` +
-                `<small>Private IP: ${homeLocation.private_ip}</small>` +
+                `${escapeHtml(homeLocation.city)}, ${escapeHtml(homeLocation.country)}<br>` +
+                `<small>Public IP: ${escapeHtml(homeLocation.ip)}</small><br>` +
+                `<small>Private IP: ${escapeHtml(homeLocation.private_ip)}</small>` +
                 `</div>`
             ).openPopup();
         }
@@ -228,10 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     fillOpacity: 0.8
                 }).addTo(eventLayer).bindPopup(
                     `<div style="font-family: 'Inter', sans-serif; color: #1e293b;">` +
-                    `<strong>${event.severity} Attack</strong><br>` +
-                    `${event.description}<br>` +
-                    `<small>Source IP: ${event.ip}</small><br>` +
-                    `<small>Location: ${event.city}, ${event.country}</small>` +
+                    `<strong>${escapeHtml(event.severity)} Attack</strong><br>` +
+                    `${escapeHtml(event.description)}<br>` +
+                    `<small>Source IP: ${escapeHtml(event.ip)}</small><br>` +
+                    `<small>Location: ${escapeHtml(event.city)}, ${escapeHtml(event.country)}</small>` +
                     `</div>`
                 );
                 markersById[event.id] = marker;
@@ -313,24 +322,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const loc = document.createElement('span');
             loc.className = 'location';
-            let locHTML = `Source: ${event.ip} `;
+            // SECURITY: Use textContent and create safe HTML structure
+            const sourceText = document.createTextNode(`Source: ${escapeHtml(event.ip)} `);
+            loc.appendChild(sourceText);
+            
             if (event.type === 'EXTERNAL') {
-                locHTML += `<span style="color:#94a3b8;"> (From: ${event.city || 'Unknown'})</span> <span class="target">| Target: ${event.target_device}</span>`;
+                const fromSpan = document.createElement('span');
+                fromSpan.style.color = '#94a3b8';
+                fromSpan.textContent = ` (From: ${escapeHtml(event.city || 'Unknown')})`;
+                loc.appendChild(fromSpan);
+                
+                const targetText = document.createTextNode(' ');
+                loc.appendChild(targetText);
+                const targetSpan = document.createElement('span');
+                targetSpan.className = 'target';
+                targetSpan.textContent = `| Target: ${escapeHtml(event.target_device)}`;
+                loc.appendChild(targetSpan);
             } else {
-                locHTML += `<span class="target">| Target: ${event.target_device} (Local)</span>`;
+                const targetSpan = document.createElement('span');
+                targetSpan.className = 'target';
+                targetSpan.textContent = `| Target: ${escapeHtml(event.target_device)} (Local)`;
+                loc.appendChild(targetSpan);
             }
-            loc.innerHTML = locHTML;
 
-            // Date line
+            // Date line - SECURITY: Use textContent
             const when = document.createElement('span');
             when.className = 'location';
             const tsMs = getEventTimestamp(event);
+            const dateSpan = document.createElement('span');
+            dateSpan.style.color = '#64748b';
             if (tsMs) {
                 const d = new Date(tsMs);
-                when.innerHTML = `<span style="color:#64748b;">Date: ${d.toLocaleString()}</span>`;
+                dateSpan.textContent = `Date: ${d.toLocaleString()}`;
             } else {
-                when.innerHTML = `<span style="color:#64748b;">Date: Unknown</span>`;
+                dateSpan.textContent = 'Date: Unknown';
             }
+            when.appendChild(dateSpan);
 
             details.appendChild(strong);
             details.appendChild(loc);
@@ -451,10 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     fillOpacity: 0.9
                 }).addTo(map).bindPopup(
                     `<div style="font-family: 'Inter', sans-serif; color: #1e293b;">` +
-                    `<strong>IP Lookup: ${data.ip}</strong><br>` +
-                    `${data.city || 'Unknown'}, ${data.country || 'Unknown'}<br>` +
-                    `<small>ISP: ${data.isp || 'Unknown'}</small><br>` +
-                    `<small>Org: ${data.org || 'Unknown'}</small>` +
+                    `<strong>IP Lookup: ${escapeHtml(data.ip)}</strong><br>` +
+                    `${escapeHtml(data.city || 'Unknown')}, ${escapeHtml(data.country || 'Unknown')}<br>` +
+                    `<small>ISP: ${escapeHtml(data.isp || 'Unknown')}</small><br>` +
+                    `<small>Org: ${escapeHtml(data.org || 'Unknown')}</small>` +
                     `</div>`
                 ).openPopup();
                 
@@ -657,27 +684,27 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawHopMarker(hopIndex) {
         let hop, isFirst, isHome, popupText;
         
-        // Determine which hop to draw
+        // Determine which hop to draw - SECURITY: Escape all user data
         if (hopIndex === 0) {
             // This is the first hop (the attacker)
             hop = currentTraceHops[0];
             isFirst = true;
             isHome = false;
-            popupText = `<strong>Hop 1 (Attacker)</strong><br><small>IP: ${hop.ip}</small><br><small>Location: ${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</small>`;
+            popupText = `<strong>Hop 1 (Attacker)</strong><br><small>IP: ${escapeHtml(hop.ip)}</small><br><small>Location: ${escapeHtml(hop.city || 'Unknown')}, ${escapeHtml(hop.country || 'Unknown')}</small>`;
         
         } else if (hopIndex < currentTraceHops.length - 1) {
             // This is a middle hop
             hop = currentTraceHops[hopIndex];
             isFirst = false;
             isHome = false;
-            popupText = `<strong>Hop ${hopIndex + 1}</strong><br><small>IP: ${hop.ip}</small><br><small>Location: ${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</small>`;
+            popupText = `<strong>Hop ${hopIndex + 1}</strong><br><small>IP: ${escapeHtml(hop.ip)}</small><br><small>Location: ${escapeHtml(hop.city || 'Unknown')}, ${escapeHtml(hop.country || 'Unknown')}</small>`;
         
         } else if (hopIndex === currentTraceHops.length - 1) {
             // This is the LAST hop (our home)
             hop = currentTraceHops[hopIndex]; // This is the homeLocation object
             isFirst = false;
             isHome = true;
-            popupText = `<strong>Server Location (Hop ${hopIndex + 1})</strong><br><small>Public IP: ${hop.ip}</small><br><small>Location: ${hop.city}, ${hop.country}</small>`;
+            popupText = `<strong>Server Location (Hop ${hopIndex + 1})</strong><br><small>Public IP: ${escapeHtml(hop.ip)}</small><br><small>Location: ${escapeHtml(hop.city)}, ${escapeHtml(hop.country)}</small>`;
         } else {
             return; // Invalid index
         }
@@ -720,22 +747,46 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         currentTraceHops = allHopsForAnim;
 
-        // Populate the TEXT list in the side panel
+        // Populate the TEXT list in the side panel - SECURITY: Use safe DOM methods
         hops.forEach((hop, index) => {
             const hopDiv = document.createElement('div');
-            hopDiv.innerHTML = `
-                <strong>Hop ${index + 1}:</strong> 
-                <span class="hop-ip">${hop.ip}</span><br>
-                <span class="hop-location">${hop.city || 'Unknown'}, ${hop.country || 'Unknown'}</span>
-            `;
+            const strong = document.createElement('strong');
+            strong.textContent = `Hop ${index + 1}:`;
+            hopDiv.appendChild(strong);
+            
+            const ipSpan = document.createElement('span');
+            ipSpan.className = 'hop-ip';
+            ipSpan.textContent = ` ${hop.ip}`;
+            hopDiv.appendChild(ipSpan);
+            
+            const br1 = document.createElement('br');
+            hopDiv.appendChild(br1);
+            
+            const locSpan = document.createElement('span');
+            locSpan.className = 'hop-location';
+            locSpan.textContent = `${escapeHtml(hop.city || 'Unknown')}, ${escapeHtml(hop.country || 'Unknown')}`;
+            hopDiv.appendChild(locSpan);
+            
             traceHopList.appendChild(hopDiv);
         });
         const homeDiv = document.createElement('div');
-        homeDiv.innerHTML = `
-            <strong>Hop ${hops.length + 1}:</strong> 
-            <span class="hop-ip">${homeLocation.ip} (Home)</span><br>
-            <span class="hop-location">${homeLocation.city}, ${homeLocation.country}</span>
-        `;
+        const homeStrong = document.createElement('strong');
+        homeStrong.textContent = `Hop ${hops.length + 1}:`;
+        homeDiv.appendChild(homeStrong);
+        
+        const homeIpSpan = document.createElement('span');
+        homeIpSpan.className = 'hop-ip';
+        homeIpSpan.textContent = ` ${escapeHtml(homeLocation.ip)} (Home)`;
+        homeDiv.appendChild(homeIpSpan);
+        
+        const br2 = document.createElement('br');
+        homeDiv.appendChild(br2);
+        
+        const homeLocSpan = document.createElement('span');
+        homeLocSpan.className = 'hop-location';
+        homeLocSpan.textContent = `${escapeHtml(homeLocation.city)}, ${escapeHtml(homeLocation.country)}`;
+        homeDiv.appendChild(homeLocSpan);
+        
         traceHopList.appendChild(homeDiv);
 
         // --- NEW: Kick off the animation ---

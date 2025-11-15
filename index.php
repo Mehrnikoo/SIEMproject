@@ -4,6 +4,12 @@
  * Entry point for the application using MVC architecture
  */
 
+// SECURITY: Set security headers
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('X-XSS-Protection: 1; mode=block');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
 // Define base path
 define('BASE_PATH', __DIR__);
 
@@ -39,14 +45,18 @@ $tracerouteController = new TracerouteController($tracerouteModel, $geoModel);
 $whoisController = new WhoisController($geoModel);
 $eventsController = new EventsController($eventModel);
 
-// Routing
-if (isset($_GET['action']) && $_GET['action'] === 'trace' && isset($_GET['ip'])) {
+// Routing - SECURITY: Sanitize and validate inputs
+$action = isset($_GET['action']) ? trim($_GET['action']) : '';
+$ip = isset($_GET['ip']) ? trim($_GET['ip']) : '';
+
+// SECURITY: Validate action parameter (whitelist approach)
+if ($action === 'trace' && !empty($ip)) {
     // Handle traceroute API endpoint
-    $tracerouteController->trace($_GET['ip']);
-} elseif (isset($_GET['action']) && $_GET['action'] === 'whois' && isset($_GET['ip'])) {
+    $tracerouteController->trace($ip);
+} elseif ($action === 'whois' && !empty($ip)) {
     // Handle whois lookup API endpoint
-    $whoisController->lookup($_GET['ip']);
-} elseif (isset($_GET['action']) && $_GET['action'] === 'real_events_summary') {
+    $whoisController->lookup($ip);
+} elseif ($action === 'real_events_summary') {
     // Lightweight summary for polling new real events
     $eventsController->realSummary();
 } else {
