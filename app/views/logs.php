@@ -38,12 +38,19 @@
             margin-bottom: 20px;
             padding-bottom: 15px;
             border-bottom: 2px solid #334155;
+            gap: 20px;
         }
         
         .header h1 {
             color: #38bdf8;
             font-size: 1.75rem;
             font-weight: 800;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         
         .nav-link {
@@ -59,6 +66,60 @@
         
         .nav-link:hover {
             background-color: #155e75;
+        }
+        
+        .event-section {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .event-section h2 {
+            margin-bottom: 4px;
+            font-size: 1.25rem;
+            color: #f8fafc;
+        }
+        
+        .event-section p.description {
+            color: #94a3b8;
+            margin-bottom: 15px;
+        }
+        
+        .event-group {
+            margin-bottom: 20px;
+        }
+        
+        .event-group h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: #cbd5e1;
+        }
+        
+        .event-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .event-table th,
+        .event-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #1f2937;
+        }
+        
+        .severity-pill {
+            padding: 2px 8px;
+            border-radius: 999px;
+            color: #0f172a;
+            font-weight: 700;
+            font-size: 0.75rem;
+            display: inline-block;
+        }
+        
+        .event-meta {
+            font-size: 0.8rem;
+            color: #94a3b8;
         }
         
         .filters {
@@ -268,10 +329,39 @@
     </style>
 </head>
 <body>
+<?php
+$defaultSeverityColors = [
+    'Critical' => '#ef4444',
+    'High' => '#f97316',
+    'Medium' => '#fbbf24',
+    'Low' => '#22c55e',
+];
+$severityColors = array_merge($defaultSeverityColors, $severity_map ?? []);
+$real_events = $real_events ?? [];
+$simulated_events = $simulated_events ?? [];
+$real_event_count = $real_event_count ?? count($real_events);
+$sim_event_count = $sim_event_count ?? count($simulated_events);
+
+if (!function_exists('logs_view_format_timestamp')) {
+    function logs_view_format_timestamp($timestamp) {
+        if (empty($timestamp)) {
+            return 'N/A';
+        }
+        $time = strtotime($timestamp);
+        if ($time === false) {
+            return $timestamp;
+        }
+        return date('Y-m-d H:i:s', $time);
+    }
+}
+?>
     <div class="container">
         <div class="header">
             <h1>📋 Logs Viewer</h1>
-            <a href="index.php" class="nav-link">← Back to Dashboard</a>
+            <div class="header-actions">
+                <a href="index.php" class="nav-link">← Dashboard</a>
+                <a href="index.php?action=vlan" class="nav-link">VLAN View</a>
+            </div>
         </div>
         
         <div class="filters">
@@ -311,11 +401,104 @@
                 <div class="label">Page</div>
                 <div class="value"><?php echo $current_page; ?> / <?php echo $total_pages; ?></div>
             </div>
+            <div class="stat-box">
+                <div class="label">Real Events</div>
+                <div class="value"><?php echo number_format($real_event_count); ?></div>
+            </div>
+            <div class="stat-box">
+                <div class="label">Simulated Events</div>
+                <div class="value"><?php echo number_format($sim_event_count); ?></div>
+            </div>
+        </div>
+        
+        <div class="event-section">
+            <h2>Security Events Overview</h2>
+            <p class="description">Latest events detected by the SIEM. Use this section to correlate raw log entries with higher-level alerts.</p>
+            
+            <div class="event-group">
+                <h3>Real Events (<?php echo number_format($real_event_count); ?>)</h3>
+                <?php if (empty($real_events)): ?>
+                    <div class="no-logs" style="padding:20px 0;">No real events available.</div>
+                <?php else: ?>
+                    <div class="logs-table-container" style="margin-bottom:15px;">
+                        <table class="event-table">
+                            <thead>
+                                <tr>
+                                    <th>Severity</th>
+                                    <th>Time</th>
+                                    <th>Source IP</th>
+                                    <th>Target</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($real_events as $event): ?>
+                                    <tr>
+                                        <td>
+                                            <?php $sev = $event['severity'] ?? 'Low'; ?>
+                                            <span class="severity-pill" style="background-color: <?php echo View::escape($severityColors[$sev] ?? '#64748b'); ?>;">
+                                                <?php echo View::escape($sev); ?>
+                                            </span>
+                                        </td>
+                                        <td><?php echo View::escape(logs_view_format_timestamp($event['timestamp'] ?? null)); ?></td>
+                                        <td>
+                                            <div><?php echo View::escape($event['ip'] ?? 'Unknown'); ?></div>
+                                            <div class="event-meta"><?php echo View::escape($event['city'] ?? ''); ?> <?php echo View::escape($event['country'] ?? ''); ?></div>
+                                        </td>
+                                        <td><?php echo View::escape($event['target_device'] ?? 'Asset'); ?></td>
+                                        <td><?php echo View::escape($event['description'] ?? ''); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <div class="event-group">
+                <h3>Simulated Events (<?php echo number_format($sim_event_count); ?>)</h3>
+                <?php if (empty($simulated_events)): ?>
+                    <div class="no-logs" style="padding:20px 0;">No simulated events available.</div>
+                <?php else: ?>
+                    <div class="logs-table-container">
+                        <table class="event-table">
+                            <thead>
+                                <tr>
+                                    <th>Severity</th>
+                                    <th>Time</th>
+                                    <th>Source IP</th>
+                                    <th>Target</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($simulated_events as $event): ?>
+                                    <tr>
+                                        <td>
+                                            <?php $sev = $event['severity'] ?? 'Low'; ?>
+                                            <span class="severity-pill" style="background-color: <?php echo View::escape($severityColors[$sev] ?? '#64748b'); ?>;">
+                                                <?php echo View::escape($sev); ?>
+                                            </span>
+                                        </td>
+                                        <td><?php echo View::escape(logs_view_format_timestamp($event['timestamp'] ?? null)); ?></td>
+                                        <td>
+                                            <div><?php echo View::escape($event['ip'] ?? 'Unknown'); ?></div>
+                                            <div class="event-meta"><?php echo View::escape($event['city'] ?? ''); ?> <?php echo View::escape($event['country'] ?? ''); ?></div>
+                                        </td>
+                                        <td><?php echo View::escape($event['target_device'] ?? 'Asset'); ?></td>
+                                        <td><?php echo View::escape($event['description'] ?? ''); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
         
         <?php if (empty($logs)): ?>
             <div class="no-logs">
-                <h2>No logs found</h2>
+                <h2>No raw logs found</h2>
                 <p>Try adjusting your filters or run 'python3 log_processor.py' to generate logs.</p>
             </div>
         <?php else: ?>

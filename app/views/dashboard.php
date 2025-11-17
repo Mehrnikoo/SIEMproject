@@ -486,11 +486,16 @@ $severity_map_json = json_encode($severity_map);
 <body>
 
     <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
             <h1>Web-Based SIEM Geolocation Dashboard</h1>
-            <a href="index.php?action=logs" style="display: inline-block; padding: 10px 20px; background-color: #0e7490; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: background-color 0.2s;">
-                📋 View Logs
-            </a>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <a href="index.php?action=logs" style="display: inline-block; padding: 10px 20px; background-color: #0e7490; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: background-color 0.2s;">
+                    📋 View Logs
+                </a>
+                <a href="index.php?action=vlan" style="display: inline-block; padding: 10px 20px; background-color: #155e75; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; transition: background-color 0.2s;">
+                    🌐 VLAN View
+                </a>
+            </div>
         </div>
 
         <div class="summary-bar">

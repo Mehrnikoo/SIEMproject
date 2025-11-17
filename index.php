@@ -39,13 +39,15 @@ $geoModel = new GeoLocationModel($config);
 $serverStatusModel = new ServerStatusModel($config);
 $tracerouteModel = new TracerouteModel();
 $logsModel = new LogsModel($config);
+$vlanModel = new VlanModel($config);
 
 // Initialize controllers
 $dashboardController = new DashboardController($eventModel, $geoModel, $serverStatusModel, $config);
 $tracerouteController = new TracerouteController($tracerouteModel, $geoModel);
 $whoisController = new WhoisController($geoModel);
 $eventsController = new EventsController($eventModel);
-$logsController = new LogsController($logsModel);
+$logsController = new LogsController($logsModel, $eventModel, $geoModel, $config);
+$vlanController = new VlanController($vlanModel, $eventModel, $geoModel, $logsModel, $serverStatusModel);
 
 // Routing - SECURITY: Sanitize and validate inputs
 $action = isset($_GET['action']) ? trim($_GET['action']) : '';
@@ -64,6 +66,12 @@ if ($action === 'trace' && !empty($ip)) {
 } elseif ($action === 'logs') {
     // Handle logs viewer page
     $logsController->index();
+} elseif ($action === 'vlan') {
+    // VLAN dashboard
+    $vlanController->index();
+} elseif ($action === 'vlan_state') {
+    // JSON state for polling
+    $vlanController->state();
 } else {
     // Default: show dashboard
     $dashboardController->index();
