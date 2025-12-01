@@ -66,16 +66,13 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[85vh]">
             <div class="lg:col-span-1 flex flex-col space-y-4">
                 <div class="flex flex-col space-y-1 w-full">
-                    <div class="flex space-x-3 items-center">
-                        <a href="index.php" class="w-44 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm rounded-lg shadow-md transition duration-200 flex items-center justify-center">
-                            Dashboard
-                        </a>
-                        <div class="relative w-44">
-                            <button id="vlan-toggle" class="flex items-center justify-between px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg w-44 transition duration-200" onclick="toggleDropdown()">
-                                <span id="vlan-selection">Loading VLANs...</span>
+                    <div class="flex items-center justify-center w-full m-2">
+                        <div class="relative w-full max-w-xs">
+                            <button id="vlan-toggle" class="w-full flex items-center justify-between px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg shadow-md transition duration-200" onclick="toggleDropdown()">
+                                <span id="vlan-selection" class="truncate">Loading VLANs...</span>
                                 <svg id="dropdown-arrow" class="w-4 h-4 ml-2 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
-                            <div id="vlan-menu" class="absolute z-10 mt-2 w-44 bg-[#1a2130] border border-[#374151] rounded-lg shadow-xl py-1 hidden"></div>
+                            <div id="vlan-menu" class="absolute left-0 right-0 z-10 mt-2 bg-[#1a2130] border border-[#374151] rounded-lg shadow-xl py-1 hidden"></div>
                         </div>
                     </div>
                     <div class="h-0 border-t border-dashed border-gray-600 w-full mb-2"></div>
