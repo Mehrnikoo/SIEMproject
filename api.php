@@ -1,0 +1,288 @@
+<?php
+/**
+ * REST API for SIEM - Receives events from Python script
+ */
+
+// Enable CORS for local applications
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+header('Content-Type: application/json');
+
+// Load configuration
+define('BASE_PATH', __DIR__);
+$config = require_once BASE_PATH . '/app/config/config.php';
+
+// Handle preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    die(json_encode(['status' => 'ok']));
+}
+
+// Ensure Python logs directory exists
+$pythonLogsDir = BASE_PATH . '/captured_logs';
+if (!is_dir($pythonLogsDir)) {
+    mkdir($pythonLogsDir, 0755, true);
+}
+
+/**
+ * Route incoming requests to appropriate handler
+ */
+$request_method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$path = str_replace('/SIEMproject/api.php', '', $path);
+
+// Parse JSON body if POST
+$input_data = null;
+if (in_array($request_method, ['POST', 'PUT'])) {
+    $raw_input = file_get_contents('php://input');
+    $input_data = json_decode($raw_input, true);
+}
+
+// Route handlers
+$response = handle_request($request_method, $path, $input_data, $config, $pythonLogsDir);
+http_response_code($response['code']);
+die(json_encode($response));
+
+/**
+ * Main request router
+ */
+function handle_request($method, $path, $data, $config, $pythonLogsDir) {
+    // POST /api/security-events - Receive security event from Python
+    if ($method === 'POST' && in_array($path, ['', '/security-events'])) {
+        return handle_log_event($data, $config, $pythonLogsDir);
+    }
+    
+    // GET /api/events - Retrieve all events
+    if ($method === 'GET' && in_array($path, ['/events', '/events/'])) {
+        return handle_get_events($config, $pythonLogsDir);
+    }
+    
+    // GET /api/logs - Retrieve raw logs
+    if ($method === 'GET' && in_array($path, ['/logs', '/logs/'])) {
+        return handle_get_logs($pythonLogsDir);
+    }
+    
+    // GET /api/status - Health check
+    if ($method === 'GET' && in_array($path, ['/status', '/status/'])) {
+        return [
+            'code' => 200,
+            'status' => 'ok',
+            'message' => 'SIEM API is running',
+            'timestamp' => date('Y-m-d H:i:s')
+        ];
+    }
+    
+    return [
+        'code' => 404,
+        'status' => 'error',
+        'message' => 'Endpoint not found: ' . $path
+    ];
+}
+
+/**
+ * Handle incoming security event from Python script
+ */
+function handle_log_event($data, $config, $pythonLogsDir) {
+    if (!$data) {
+        return [
+            'code' => 400,
+            'status' => 'error',
+            'message' => 'Invalid JSON payload'
+        ];
+    }
+    
+    // Validate required fields
+    $required = ['attack_type', 'source', 'target', 'timestamp'];
+    foreach ($required as $field) {
+        if (!isset($data[$field])) {
+            return [
+                'code' => 400,
+                'status' => 'error',
+                'message' => "Missing required field: $field"
+            ];
+        }
+    }
+    
+    // Convert Python format to website format
+    $event = convert_python_event_format($data);
+    
+    // Save to security_events.json
+    $security_file = $pythonLogsDir . '/security_events.json';
+    $security_events = [];
+    
+    if (file_exists($security_file)) {
+        $content = @file_get_contents($security_file);
+        $security_events = json_decode($content, true) ?: [];
+    }
+    
+    $security_events[] = $event;
+    
+    // Keep only last 500 events to prevent file bloat
+    if (count($security_events) > 500) {
+        $security_events = array_slice($security_events, -500);
+    }
+    
+    file_put_contents($security_file, json_encode($security_events, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    
+    // Also append to real events for immediate display
+    $real_events_file = $config['data_files']['log_data'];
+    $real_events = [];
+    
+    if (file_exists($real_events_file)) {
+        $content = @file_get_contents($real_events_file);
+        $real_events = json_decode($content, true) ?: [];
+    }
+    
+    $real_events[] = $event;
+    
+    // Keep only last 500 events
+    if (count($real_events) > 500) {
+        $real_events = array_slice($real_events, -500);
+    }
+    
+    file_put_contents($real_events_file, json_encode($real_events, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    
+    return [
+        'code' => 201,
+        'status' => 'success',
+        'message' => 'Event logged successfully',
+        'event_id' => $event['id'] ?? null
+    ];
+}
+
+/**
+ * Convert Python event format to website format
+ */
+function convert_python_event_format($python_event) {
+    // Extract severity level from severity_sticker (e.g., "Critical 🔴" -> "Critical")
+    $severity = 'Low';
+    if (isset($python_event['severity_sticker'])) {
+        preg_match('/^(\w+)/', $python_event['severity_sticker'], $matches);
+        $severity = $matches[1] ?? 'Low';
+    }
+    
+    // Determine event type (INTERNAL or EXTERNAL based on source IP)
+    $type = is_internal_ip($python_event['source']) ? 'INTERNAL' : 'EXTERNAL';
+    
+    // Generate unique ID
+    $id = $python_event['id'] ?? 'evt-' . uniqid();
+    
+    return [
+        'id' => $id,
+        'timestamp' => $python_event['timestamp'] ?? date('Y-m-d H:i:s'),
+        'severity' => $severity,
+        'type' => $type,
+        'attack_type' => $python_event['attack_type'] ?? 'Unknown',
+        'source' => $python_event['source'] ?? '0.0.0.0',
+        'target' => $python_event['target'] ?? 'localhost',
+        'details' => $python_event['details'] ?? '',
+        'formatted_log' => $python_event['formatted_log'] ?? $python_event['attack_type'],
+        'country' => 'Unknown', // Will be geocoded by frontend
+        'from_python' => true
+    ];
+}
+
+/**
+ * Check if IP is internal/private
+ */
+function is_internal_ip($ip) {
+    $private_ips = [
+        '/^10\./i',
+        '/^172\.(1[6-9]|2[0-9]|3[01])\./i',
+        '/^192\.168\./i',
+        '/^127\./i',
+        '/^169\.254\./i',
+        '/^fc00:/i',
+        '/^fe80:/i',
+        '/localhost/i'
+    ];
+    
+    foreach ($private_ips as $pattern) {
+        if (preg_match($pattern, $ip)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Get all events including Python-generated ones
+ */
+function handle_get_events($config, $pythonLogsDir) {
+    $events = [];
+    
+    // Load real events from log_data
+    $real_file = $config['data_files']['log_data'];
+    if (file_exists($real_file)) {
+        $content = @file_get_contents($real_file);
+        $events = array_merge($events, json_decode($content, true) ?: []);
+    }
+    
+    // Load security events from Python
+    $security_file = $pythonLogsDir . '/security_events.json';
+    if (file_exists($security_file)) {
+        $content = @file_get_contents($security_file);
+        $events = array_merge($events, json_decode($content, true) ?: []);
+    }
+    
+    // Sort by timestamp descending
+    usort($events, function($a, $b) {
+        $timeA = strtotime($a['timestamp'] ?? '0000-00-00');
+        $timeB = strtotime($b['timestamp'] ?? '0000-00-00');
+        return $timeB <=> $timeA;
+    });
+    
+    return [
+        'code' => 200,
+        'status' => 'success',
+        'count' => count($events),
+        'events' => array_slice($events, 0, 500)
+    ];
+}
+
+/**
+ * Get raw logs from Python
+ */
+function handle_get_logs($pythonLogsDir) {
+    $logs = [];
+    
+    // Read all JSON files in captured_logs directory
+    if (is_dir($pythonLogsDir)) {
+        $files = glob($pythonLogsDir . '/*.json');
+        foreach ($files as $file) {
+            // Skip security_events.json
+            if (basename($file) === 'security_events.json') {
+                continue;
+            }
+            
+            $content = @file_get_contents($file);
+            $data = json_decode($content, true);
+            
+            if (is_array($data)) {
+                $log_type = basename($file, '.json');
+                foreach ($data as $entry) {
+                    $logs[] = [
+                        'timestamp' => $entry['timestamp'] ?? date('Y-m-d H:i:s'),
+                        'log_type' => $log_type,
+                        'data' => $entry
+                    ];
+                }
+            }
+        }
+    }
+    
+    // Sort by timestamp descending
+    usort($logs, function($a, $b) {
+        $timeA = strtotime($a['timestamp'] ?? '0000-00-00');
+        $timeB = strtotime($b['timestamp'] ?? '0000-00-00');
+        return $timeB <=> $timeA;
+    });
+    
+    return [
+        'code' => 200,
+        'status' => 'success',
+        'count' => count($logs),
+        'logs' => array_slice($logs, 0, 1000)
+    ];
+}

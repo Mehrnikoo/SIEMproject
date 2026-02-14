@@ -10,19 +10,106 @@ class LogsModel {
     }
     
     /**
-     * Load all raw logs
+     * Load all raw logs including Python-generated logs
      */
     public function loadRawLogs() {
-        $file = $this->config['data_files']['raw_logs'];
+        $logs = [];
         
-        if (!file_exists($file)) {
+        // Load from raw_logs.json
+        $file = $this->config['data_files']['raw_logs'];
+        if (file_exists($file)) {
+            $content = @file_get_contents($file);
+            $data = json_decode($content, true);
+            if (is_array($data)) {
+                $logs = array_merge($logs, $data);
+            }
+        }
+        
+        // Load from Python-generated captured_logs
+        $pythonLogs = $this->loadPythonCapturedLogs();
+        $logs = array_merge($logs, $pythonLogs);
+        
+        // Sort by timestamp (newest first)
+        usort($logs, function($a, $b) {
+            $timeA = isset($a['timestamp']) ? strtotime($a['timestamp']) : 0;
+            $timeB = isset($b['timestamp']) ? strtotime($b['timestamp']) : 0;
+            return $timeB <=> $timeA;
+        });
+        
+        return $logs;
+    }
+    
+    /**
+     * Load logs captured by Python SIEM script from captured_logs directory
+     */
+    public function loadPythonCapturedLogs() {
+        $logs = [];
+        $baseDir = dirname(__DIR__, 2); // Go up to SIEMproject root
+        $capturedLogsDir = $baseDir . '/captured_logs';
+        
+        if (!is_dir($capturedLogsDir)) {
             return [];
         }
         
-        $content = @file_get_contents($file);
-        $data = json_decode($content, true);
+        // Read all JSON files except security_events.json
+        $files = glob($capturedLogsDir . '/*.json');
+        foreach ($files as $file) {
+            $filename = basename($file, '.json');
+            
+            // Skip security events as they're handled separately
+            if ($filename === 'security_events') {
+                continue;
+            }
+            
+            $content = @file_get_contents($file);
+            $data = json_decode($content, true);
+            
+            if (is_array($data)) {
+                foreach ($data as $entry) {
+                    // Normalize to standard log format
+                    $log = [
+                        'timestamp' => $entry['timestamp'] ?? date('Y-m-d H:i:s'),
+                        'log_type' => $filename, // e.g., "nginx_access", "linux_system"
+                        'log_file' => $filename,
+                        'raw_line' => $this->extractRawLine($entry),
+                        'source_ip' => $entry['ip'] ?? $entry['source'] ?? 'unknown',
+                        'from_python' => true,
+                        'data' => $entry
+                    ];
+                    
+                    $logs[] = $log;
+                }
+            }
+        }
         
-        return is_array($data) ? $data : [];
+        return $logs;
+    }
+    
+    /**
+     * Extract a readable single-line representation from a log entry
+     */
+    private function extractRawLine($entry) {
+        if (is_string($entry)) {
+            return $entry;
+        }
+        
+        if (is_array($entry)) {
+            // Try to find a message field
+            if (isset($entry['message'])) {
+                return $entry['message'];
+            }
+            if (isset($entry['MESSAGE'])) {
+                return $entry['MESSAGE'];
+            }
+            if (isset($entry['formatted_log'])) {
+                return $entry['formatted_log'];
+            }
+            
+            // Fallback: convert to JSON string
+            return json_encode($entry);
+        }
+        
+        return '';
     }
     
     /**

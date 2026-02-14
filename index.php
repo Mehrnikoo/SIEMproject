@@ -48,6 +48,7 @@ $whoisController = new WhoisController($geoModel);
 $eventsController = new EventsController($eventModel);
 $logsController = new LogsController($logsModel, $eventModel, $geoModel, $config);
 $vlanController = new VlanController($vlanModel, $eventModel, $geoModel, $logsModel, $serverStatusModel);
+$syncController = new SyncController($config);
 
 // Routing - SECURITY: Sanitize and validate inputs
 $action = isset($_GET['action']) ? trim($_GET['action']) : '';
@@ -72,6 +73,12 @@ if ($action === 'trace' && !empty($ip)) {
 } elseif ($action === 'vlan_state') {
     // JSON state for polling
     $vlanController->state();
+} elseif ($action === 'sync_status') {
+    // Show sync status
+    $syncController->status();
+} elseif ($action === 'sync') {
+    // Trigger synchronization
+    $syncController->sync();
 } else {
     // Default: show dashboard
     $dashboardController->index();
