@@ -34,16 +34,25 @@ class SyncService {
      * Sync all Python events and logs to website data files
      */
     public function syncAll() {
-        echo "[Sync] Starting synchronization...\n";
+        $this->log("[Sync] Starting synchronization...");
         
         $events_synced = $this->syncSecurityEvents();
-        echo "[Sync] ✓ Security events synced: $events_synced events\n";
+        $this->log("[Sync] ✓ Security events synced: $events_synced events");
         
         $logs_synced = $this->syncRawLogs();
-        echo "[Sync] ✓ Raw logs synced: $logs_synced logs\n";
+        $this->log("[Sync] ✓ Raw logs synced: $logs_synced logs");
         
-        echo "[Sync] Synchronization complete!\n";
+        $this->log("[Sync] Synchronization complete!");
         return true;
+    }
+    
+    /**
+     * Output message only in CLI mode
+     */
+    private function log($message) {
+        if (php_sapi_name() === 'cli') {
+            echo $message . "\n";
+        }
     }
     
     /**
@@ -304,18 +313,4 @@ if (php_sapi_name() === 'cli') {
     } else {
         $sync->syncAll();
     }
-}
-
-// Enable API access to sync
-if (isset($_GET['action']) && $_GET['action'] === 'sync') {
-    header('Content-Type: application/json');
-    $sync = new SyncService($config);
-    $sync->syncAll();
-    echo json_encode(['status' => 'success', 'message' => 'Sync completed']);
-}
-
-if (isset($_GET['action']) && $_GET['action'] === 'status') {
-    header('Content-Type: application/json');
-    $sync = new SyncService($config);
-    echo json_encode($sync->getStatus());
 }

@@ -250,14 +250,35 @@
         setInterval(refreshStatus, 5000);
         
         function refreshStatus() {
-            fetch('<?php echo $_SERVER['PHP_SELF']; ?>?action=status')
-                .then(r => r.json())
+            // Construct URL with status action - relative to current page
+            const currentPath = window.location.pathname;
+            const url = new URL(window.location.origin + currentPath);
+            url.searchParams.set('action', 'sync_status');
+            
+            fetch(url.toString(), {
+                headers: {'Accept': 'application/json'}
+            })
+                .then(r => {
+                    if (!r.ok) throw new Error('Server error', r.status);
+                    return r.text();
+                })
+                .then(text => {
+                    if (!text.trim()) throw new Error('Empty response from server');
+                    try {
+                        return JSON.parse(text);
+                    } catch(e) {
+                        console.error('JSON Parse Error. Response:', text.substring(0, 200));
+                        throw new Error('Invalid JSON: ' + e.message);
+                    }
+                })
                 .then(data => {
-                    document.getElementById('security-events').textContent = data.security_events;
-                    document.getElementById('raw-logs').textContent = data.raw_logs;
+                    document.getElementById('security-events').textContent = data.security_events || 0;
+                    document.getElementById('raw-logs').textContent = data.raw_logs || 0;
                     document.getElementById('update-time').textContent = new Date().toLocaleTimeString();
                 })
-                .catch(e => console.log('Refresh failed:', e));
+                .catch(e => {
+                    console.log('Auto-refresh error:', e.message);
+                });
         }
         
         function syncNow() {
@@ -269,13 +290,33 @@
             spinner.classList.remove('hidden');
             msg.classList.add('hidden');
             
-            fetch('<?php echo $_SERVER['PHP_SELF']; ?>?action=sync')
-                .then(r => r.json())
+            // Construct URL with sync action - relative to current page
+            const currentPath = window.location.pathname;
+            const url = new URL(window.location.origin + currentPath);
+            url.searchParams.set('action', 'sync');
+            
+            fetch(url.toString(), {
+                headers: {'Accept': 'application/json'}
+            })
+                .then(r => {
+                    if (!r.ok) throw new Error('Server error: ' + r.status);
+                    return r.text();
+                })
+                .then(text => {
+                    if (!text.trim()) throw new Error('Empty response from server');
+                    try {
+                        return JSON.parse(text);
+                    } catch(e) {
+                        console.error('JSON Parse Error. Response:', text.substring(0, 200));
+                        throw new Error('Invalid JSON: ' + e.message);
+                    }
+                })
                 .then(data => {
                     msg.className = 'alert alert-success';
-                    msg.textContent = '✓ ' + data.message;
+                    msg.textContent = '✓ ' + (data.message || 'Sync completed successfully');
                     msg.classList.remove('hidden');
                     
+                    // Refresh the counts
                     setTimeout(() => {
                         refreshStatus();
                     }, 1000);
@@ -284,6 +325,7 @@
                     msg.className = 'alert alert-error';
                     msg.textContent = '✗ Sync failed: ' + e.message;
                     msg.classList.remove('hidden');
+                    console.error('Sync error details:', e);
                 })
                 .finally(() => {
                     btn.disabled = false;
