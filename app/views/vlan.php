@@ -113,9 +113,10 @@
                         <span class="text-xs text-slate-400 font-normal" id="device-count"></span>
                     </h3>
                     <div class="flex justify-between text-xs text-gray-400 border-b border-gray-700 pb-1 mb-2 font-medium uppercase">
-                        <span class="w-1/3">Type</span>
-                        <span class="w-1/3">IP Address</span>
-                        <span class="w-1/3 text-right">Last Seen</span>
+                        <span class="w-1/4">Type</span>
+                        <span class="w-1/4">IP Address</span>
+                        <span class="w-1/4">Last Seen</span>
+                        <span class="w-1/4 text-right">Actions</span>
                     </div>
                     <div id="device-list" class="flex-1 overflow-y-scroll custom-scroll space-y-3 pr-2 text-sm text-gray-300">
                         <p class="text-gray-500 text-center">Gathering endpoints...</p>
@@ -224,12 +225,25 @@
             container.innerHTML = '';
             vlan.endpoints.slice(0, 25).forEach(endpoint => {
                 const row = document.createElement('div');
-                row.className = 'flex justify-between text-sm hover:bg-gray-700/30 p-1 rounded-md transition duration-150';
+                row.className = 'flex justify-between text-sm hover:bg-gray-700/30 p-1 rounded-md transition duration-150 items-center';
+                const ip = endpoint.ip || '';
                 row.innerHTML = `
-                    <span class="w-1/3 font-semibold text-blue-200">${endpoint.type || 'Host'}</span>
-                    <span class="w-1/3 text-gray-200">${endpoint.ip}</span>
-                    <span class="w-1/3 text-right text-gray-500 text-xs">${formatTime(endpoint.last_seen)}</span>
+                    <span class="w-1/4 font-semibold text-blue-200">${endpoint.type || 'Host'}</span>
+                    <span class="w-1/4 text-gray-200">${ip}</span>
+                    <span class="w-1/4 text-gray-500 text-xs">${formatTime(endpoint.last_seen)}</span>
+                    <span class="w-1/4 text-right">
+                        <button class="px-2 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded-md" data-ip="${ip}">Contain</button>
+                    </span>
                 `;
+                const btn = row.querySelector('button');
+                if (btn) {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (!ip) return;
+                        if (!confirm('Contain device ' + ip + '? This will queue a containment action.')) return;
+                        sendContainmentAction(ip);
+                    });
+                }
                 container.appendChild(row);
             });
         }
@@ -264,12 +278,136 @@
                 container.innerHTML = '<span class="text-xs text-gray-500">No traffic data.</span>';
                 return;
             }
+            // Show VLAN-calculated traffic categories first
             Object.entries(vlan.traffic).forEach(([key, value]) => {
                 const badge = document.createElement('div');
                 badge.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
                 badge.innerHTML = `<span class="text-gray-400 capitalize">${key}</span><div class="text-white font-bold text-base">${value}</div>`;
                 container.appendChild(badge);
             });
+
+            // If Python network stats available and this VLAN contains the SIEM host, show host-level metrics
+            try {
+                const net = window.vlanNetwork || {};
+                const stats = net.stats || null;
+                const scan = net.scan || null;
+                const hist = net.stats_history || null;
+                // Determine if VLAN contains the host IP
+                let showHost = false;
+                if (scan && scan.private_ip) {
+                    // Compare cidr base to vlan.cidr
+                    if (vlan.cidr && scan.private_ip.startsWith(vlan.cidr.split('.0/')[0])) {
+                        showHost = true;
+                    }
+                    // Or if any device in scan.devices is part of this VLAN endpoints
+                    if (!showHost && Array.isArray(scan.devices) && scan.devices.length) {
+                        const deviceSet = new Set(scan.devices);
+                        const endpointIps = (vlan.endpoints || []).map(e => e.ip);
+                        if (endpointIps.some(ip => deviceSet.has(ip))) showHost = true;
+                    }
+                }
+
+                if (showHost && stats) {
+                    const sent = stats.bytes_sent || 0;
+                    const recv = stats.bytes_recv || 0;
+                    const devices = (scan && Array.isArray(scan.devices)) ? scan.devices.length : 0;
+
+                    // compute KB/s using history if available
+                    let kbpsSent = null, kbpsRecv = null;
+                    if (Array.isArray(hist) && hist.length >= 2) {
+                        const a = hist[hist.length - 2];
+                        const b = hist[hist.length - 1];
+                        try {
+                            const ta = new Date(a.timestamp).getTime() / 1000;
+                            const tb = new Date(b.timestamp).getTime() / 1000;
+                            const dt = Math.max(1, tb - ta);
+                            kbpsSent = ((b.bytes_sent - a.bytes_sent) / dt) / 1024;
+                            kbpsRecv = ((b.bytes_recv - a.bytes_recv) / dt) / 1024;
+                        } catch (e) {
+                            kbpsSent = null; kbpsRecv = null;
+                        }
+                    } else {
+                        // fallback to previous sample stored in browser between polls
+                        try {
+                            const prev = window.lastNetworkSample || null;
+                            if (prev && prev.timestamp && stats.timestamp) {
+                                const ta = new Date(prev.timestamp).getTime() / 1000;
+                                const tb = new Date(stats.timestamp).getTime() / 1000;
+                                const dt = Math.max(1, tb - ta);
+                                kbpsSent = ((stats.bytes_sent - prev.bytes_sent) / dt) / 1024;
+                                kbpsRecv = ((stats.bytes_recv - prev.bytes_recv) / dt) / 1024;
+                            } else if (prev && prev._ts) {
+                                const ta = prev._ts / 1000;
+                                const tb = Date.now() / 1000;
+                                const dt = Math.max(1, tb - ta);
+                                kbpsSent = ((stats.bytes_sent - prev.bytes_sent) / dt) / 1024;
+                                kbpsRecv = ((stats.bytes_recv - prev.bytes_recv) / dt) / 1024;
+                            }
+                        } catch (e) {
+                            kbpsSent = null; kbpsRecv = null;
+                        }
+                        // update lastNetworkSample for next poll
+                        try { window.lastNetworkSample = Object.assign({}, stats); window.lastNetworkSample._ts = Date.now(); } catch(e) {}
+                    }
+
+                    const hostBadge = document.createElement('div');
+                    hostBadge.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
+                    hostBadge.innerHTML = `<span class="text-gray-400">host sent</span><div class="text-white font-bold text-base">${(sent/1024).toFixed(1)} KB</div><div class="text-gray-400 text-xs">${kbpsSent !== null ? kbpsSent.toFixed(1) + ' KB/s' : ''}</div>`;
+                    container.appendChild(hostBadge);
+
+                    const hostBadge2 = document.createElement('div');
+                    hostBadge2.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
+                    hostBadge2.innerHTML = `<span class="text-gray-400">host recv</span><div class="text-white font-bold text-base">${(recv/1024).toFixed(1)} KB</div><div class="text-gray-400 text-xs">${kbpsRecv !== null ? kbpsRecv.toFixed(1) + ' KB/s' : ''}</div>`;
+                    container.appendChild(hostBadge2);
+
+                    const devBadge = document.createElement('div');
+                    devBadge.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
+                    devBadge.innerHTML = `<span class="text-gray-400">discovered</span><div class="text-white font-bold text-base">${devices}</div>`;
+                    container.appendChild(devBadge);
+
+                    // If history is available, draw a dynamic sparkline (uses last 60 entries)
+                    if (Array.isArray(hist) && hist.length) {
+                        const slice = hist.slice(-60);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 240;
+                        canvas.height = 48;
+                        canvas.className = 'rounded-md';
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'bg-[#0b1220] p-2 rounded-md border border-[#374151]';
+                        wrapper.appendChild(canvas);
+                        container.appendChild(wrapper);
+
+                        const ctx = canvas.getContext('2d');
+                        const arr = slice.map(x => (x.bytes_recv || 0) + (x.bytes_sent || 0));
+                        const max = Math.max(...arr, 1);
+                        // clear
+                        ctx.clearRect(0,0,canvas.width,canvas.height);
+                        // gradient fill
+                        const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+                        grad.addColorStop(0, 'rgba(59,130,246,0.18)');
+                        grad.addColorStop(1, 'rgba(59,130,246,0.02)');
+                        ctx.fillStyle = grad;
+                        ctx.strokeStyle = '#3b82f6';
+                        ctx.lineWidth = 2;
+
+                        // path
+                        ctx.beginPath();
+                        arr.forEach((v, i) => {
+                            const x = (i / (arr.length - 1 || 1)) * canvas.width;
+                            const y = canvas.height - (v / max) * canvas.height;
+                            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                        });
+                        ctx.stroke();
+                        // fill under curve
+                        ctx.lineTo(canvas.width, canvas.height);
+                        ctx.lineTo(0, canvas.height);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                }
+            } catch (e) {
+                console.error('Error rendering host metrics', e);
+            }
         }
         
         function selectVlan(name) {
@@ -289,13 +427,22 @@
         
         async function refreshVlanState() {
             try {
-                const response = await fetch('index.php?action=vlan_state', { cache: 'no-store' });
+                const response = await fetch('index.php?action=vlan_state', { cache: 'no-store', headers: { 'Accept': 'application/json' } });
                 if (!response.ok) {
                     return;
                 }
                 const data = await response.json();
                 window.vlanState = data.vlans || [];
                 window.vlanSummary = data.summary || {};
+                // expose network details globally for UI
+                window.vlanNetwork = data.network || {};
+                // keep last network sample to compute live rates when history isn't available
+                if (!window.lastNetworkSample && window.vlanNetwork.stats) {
+                    try {
+                        window.lastNetworkSample = Object.assign({}, window.vlanNetwork.stats);
+                        window.lastNetworkSample._ts = Date.now();
+                    } catch(e) { window.lastNetworkSample = null; }
+                }
                 updateSummary();
                 buildDropdown();
                 if (currentVlanName) {
@@ -315,8 +462,55 @@
             updateSummary();
             buildDropdown();
             selectVlan(window.vlanState.length ? window.vlanState[0].name : null);
-            setInterval(refreshVlanState, 15000);
+
+    async function sendContainmentAction(ip) {
+        try {
+            const payload = { ip: ip, command: 'block' };
+            const r = await fetch('index.php?action=containment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (data && data.status === 'ok') {
+                alert('Containment queued for ' + ip);
+                // refresh state to show pending action
+                refreshVlanState();
+            } else {
+                alert('Failed to queue containment: ' + (data.message || 'unknown'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error sending containment action');
+        }
+    }
+            setInterval(refreshVlanState, 3000);
         });
+        // Display executed containment actions if present
+        (function showContainmentLog() {
+            const container = document.getElementById('alerts-container');
+            const addLogSection = document.createElement('div');
+            addLogSection.id = 'containment-log';
+            addLogSection.className = 'mt-2 text-xs text-gray-300';
+            container.appendChild(addLogSection);
+
+            setInterval(() => {
+                const logEl = document.getElementById('containment-log');
+                if (!logEl) return;
+                const executed = (window.vlanNetwork && window.vlanNetwork.executed_actions) || [];
+                if (!executed.length) {
+                    logEl.innerHTML = '<p class="text-gray-500">No containment actions executed.</p>';
+                    return;
+                }
+                logEl.innerHTML = '';
+                executed.slice(-6).reverse().forEach(a => {
+                    const row = document.createElement('div');
+                    row.className = 'flex justify-between items-center gap-2';
+                    row.innerHTML = `<span class="text-sm">${a.ip} &nbsp;<span class="text-xs text-gray-400">(${a.status})</span></span><span class="text-xs text-gray-400">${a.executed_at || a.requested_at}</span>`;
+                    logEl.appendChild(row);
+                });
+            }, 5000);
+        })();
     </script>
 </body>
 </html>

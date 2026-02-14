@@ -73,6 +73,9 @@ if ($action === 'trace' && !empty($ip)) {
 } elseif ($action === 'vlan_state') {
     // JSON state for polling
     $vlanController->state();
+} elseif ($action === 'containment') {
+    // Web UI requests containment actions (POST JSON)
+    $vlanController->containment();
 } elseif ($action === 'sync_status') {
     // Show sync status
     $syncController->status();

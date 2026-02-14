@@ -605,6 +605,52 @@ class Network(Logs):
         print("---------------------------------")
         return devices
 
+    def persist_network_scan(self, devices):
+        """
+        Persist the latest network scan to captured_logs/network_scan.json
+        """
+        try:
+            out = {
+                'scanned_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'private_ip': self.private_ip,
+                'devices': devices
+            }
+            path = os.path.join('captured_logs', 'network_scan.json')
+            with open(path, 'w') as f:
+                json.dump(out, f, indent=4)
+        except Exception as e:
+            print(f"[Network] Failed to persist scan: {e}")
+
+    def persist_traffic_stats(self, bytes_sent, bytes_recv):
+        try:
+            out = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'private_ip': self.private_ip,
+                'bytes_sent': bytes_sent,
+                'bytes_recv': bytes_recv
+            }
+            path = os.path.join('captured_logs', 'network_stats.json')
+            with open(path, 'w') as f:
+                json.dump(out, f, indent=4)
+            # Also append to history (trim to last 120 entries)
+            try:
+                hist_path = os.path.join('captured_logs', 'network_stats_history.json')
+                history = []
+                if os.path.exists(hist_path):
+                    try:
+                        with open(hist_path, 'r') as hf:
+                            history = json.load(hf)
+                    except: history = []
+                history.append(out)
+                if len(history) > 120:
+                    history = history[-120:]
+                with open(hist_path, 'w') as hf:
+                    json.dump(history, hf, indent=4)
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[Network] Failed to persist traffic stats: {e}")
+
     def get_traffic_stats(self):
         bytes_sent = 0
         bytes_recv = 0
@@ -629,6 +675,77 @@ class Network(Logs):
                             bytes_sent = int(parts[2])
             except: pass
         return bytes_sent, bytes_recv
+
+    def check_for_containment_actions(self, enabled=False):
+        """
+        Check for containment actions written by the web UI.
+        Actions should be written to captured_logs/containment_actions.json as a list of objects.
+        This function will mark actions as executed in containment_executed.json and optionally
+        attempt to apply a local block (only when enabled and running as root on Linux).
+        """
+        try:
+            actions_path = os.path.join('captured_logs', 'containment_actions.json')
+            executed_path = os.path.join('captured_logs', 'containment_executed.json')
+            if not os.path.exists(actions_path):
+                return
+            try:
+                with open(actions_path, 'r') as f:
+                    actions = json.load(f)
+            except Exception:
+                return
+
+            remaining = []
+            executed = []
+            if os.path.exists(executed_path):
+                try:
+                    with open(executed_path, 'r') as f:
+                        executed = json.load(f)
+                except: executed = []
+
+            for action in actions:
+                # Expected action shape: { 'ip': '1.2.3.4', 'command': 'block', 'requested_at': '...' }
+                ip = action.get('ip')
+                command = action.get('command')
+                action_id = action.get('id') or f"action-{int(time.time())}"
+                result = {'id': action_id, 'ip': ip, 'command': command, 'requested_at': action.get('requested_at'), 'executed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'status': 'skipped'}
+
+                if not ip or not command:
+                    result['status'] = 'invalid'
+                    executed.append(result)
+                    continue
+
+                # Safe default: do not run destructive commands unless explicitly enabled
+                if enabled and self.os_type == 'Linux' and os.geteuid() == 0:
+                    try:
+                        if command == 'block':
+                            # Attempt to add an iptables DROP rule for the IP
+                            subprocess.check_call(['iptables', '-I', 'INPUT', '-s', ip, '-j', 'DROP'])
+                            result['status'] = 'blocked'
+                        else:
+                            result['status'] = 'unknown-command'
+                    except Exception as e:
+                        result['status'] = 'failed'
+                        result['error'] = str(e)
+                else:
+                    # Log the intended action for manual review
+                    result['status'] = 'logged'
+                executed.append(result)
+
+            # Write executed log and clear input actions file
+            try:
+                with open(executed_path, 'w') as f:
+                    json.dump(executed, f, indent=4)
+            except Exception:
+                pass
+
+            # Remove containment_actions.json so actions are not reprocessed
+            try:
+                os.remove(actions_path)
+            except Exception:
+                pass
+
+        except Exception as e:
+            print(f"[Network] containment check failed: {e}")
 
     def visualize_traffic(self):
         if not tk:
@@ -708,6 +825,27 @@ if __name__ == "__main__":
     t.start()
     print("SIEM Log Monitor running in background.")
     print("Opening Network Traffic Window...")
+    # Start a background thread to persist network scans, traffic stats, and handle containment actions
+    def network_maintenance_loop():
+        try:
+            while True:
+                try:
+                    devices = siem_network.scan_network()
+                    if devices:
+                        siem_network.persist_network_scan(devices)
+                    sent, recv = siem_network.get_traffic_stats()
+                    siem_network.persist_traffic_stats(sent, recv)
+                    # Do not enable destructive containment by default. Set ENABLE_CONTAINMENT env var to '1' to enable.
+                    enable_containment = os.environ.get('ENABLE_CONTAINMENT', '0') == '1'
+                    siem_network.check_for_containment_actions(enabled=enable_containment)
+                except Exception as e:
+                    print(f"[Network] maintenance error: {e}")
+                time.sleep(15)
+        except KeyboardInterrupt:
+            pass
+
+    net_thread = threading.Thread(target=network_maintenance_loop, daemon=True)
+    net_thread.start()
     try:
         siem_network.visualize_traffic()
     except KeyboardInterrupt:
