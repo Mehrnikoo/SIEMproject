@@ -4,145 +4,95 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VLAN Intelligence - SIEM Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0e111a;
-            color: #e5e7eb;
-        }
-        .graph-axis {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            bottom: 20px;
-        }
-        .graph-axis::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 1px;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        .graph-axis::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            height: 1px;
-            width: 100%;
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        .custom-scroll::-webkit-scrollbar {
-            width: 6px;
-        }
-        .custom-scroll::-webkit-scrollbar-track {
-            background: #1a2130;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb {
-            background-color: #374151;
-            border-radius: 20px;
-        }
-    </style>
+    <!-- Local lightweight styles so page works without external CDNs -->
+    <link rel="stylesheet" href="public/assets/css/vlan.css">
 </head>
-<body class="p-4 md:p-8 min-h-screen antialiased">
-    <div class="max-w-7xl mx-auto h-full space-y-4">
-        <div class="flex items-center justify-between flex-wrap gap-3">
-            <h1 class="text-2xl font-extrabold text-sky-400">VLAN &amp; Network Intelligence Center</h1>
-            <div class="flex gap-2 flex-wrap">
-                <a href="index.php" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-medium text-sm rounded-lg shadow-md transition duration-200 flex items-center justify-center">
-                    ← Dashboard
-                </a>
-                <a href="index.php?action=logs" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium text-sm rounded-lg shadow-md transition duration-200 flex items-center justify-center">
-                    📋 Logs Viewer
-                </a>
-            </div>
-        </div>
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[85vh]">
-            <div class="lg:col-span-1 flex flex-col space-y-4">
-                <div class="flex flex-col space-y-1 w-full">
-                    <div class="flex items-center justify-center w-full m-2">
-                        <div class="relative w-full max-w-xs">
-                            <button id="vlan-toggle" class="w-full flex items-center justify-between px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg shadow-md transition duration-200" onclick="toggleDropdown()">
-                                <span id="vlan-selection" class="truncate">Loading VLANs...</span>
-                                <svg id="dropdown-arrow" class="w-4 h-4 ml-2 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </button>
-                            <div id="vlan-menu" class="absolute left-0 right-0 z-10 mt-2 bg-[#1a2130] border border-[#374151] rounded-lg shadow-xl py-1 hidden"></div>
+<body>
+    <div class="vlan-page">
+        <header class="vlan-header">
+            <h1 class="vlan-title">VLAN &amp; Network Intelligence Center</h1>
+            <nav class="vlan-nav">
+                <a href="index.php" class="vlan-btn vlan-btn-primary">← Dashboard</a>
+                <a href="index.php?action=logs" class="vlan-btn vlan-btn-secondary">📋 Logs Viewer</a>
+            </nav>
+        </header>
+
+        <div class="vlan-grid">
+            <aside class="vlan-card">
+                <div class="vlan-card-body">
+                    <div class="vlan-dropdown-wrap">
+                        <button type="button" id="vlan-toggle" class="vlan-dropdown-btn" onclick="toggleDropdown()">
+                            <span id="vlan-selection">Loading VLANs...</span>
+                            <svg id="dropdown-arrow" class="vlan-dropdown-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        <div id="vlan-menu" class="vlan-dropdown-menu hidden"></div>
+                    </div>
+
+                    <h2 class="vlan-card-title">VLAN &amp; SIEM Status</h2>
+                    <ul class="vlan-status-list">
+                        <li class="vlan-status-item">
+                            <span class="vlan-status-label">Current VLAN</span>
+                            <span id="vlan-display" class="vlan-status-value">--</span>
+                        </li>
+                        <li class="vlan-status-item">
+                            <span class="vlan-status-label">Threat Count</span>
+                            <span id="threat-count" class="vlan-status-value accent-warning">-- Alerts</span>
+                        </li>
+                        <li class="vlan-status-item">
+                            <span class="vlan-status-label">Active Endpoints</span>
+                            <span id="endpoint-count" class="vlan-status-value accent-success">--</span>
+                        </li>
+                    </ul>
+
+                    <div class="vlan-stat-grid">
+                        <div class="vlan-stat-chip emerald">
+                            <span id="summary-endpoints" class="value">--</span>
+                            <span class="label">Total Endpoints</span>
+                        </div>
+                        <div class="vlan-stat-chip amber">
+                            <span id="summary-threats" class="value">--</span>
+                            <span class="label">Total Threats</span>
+                        </div>
+                        <div class="vlan-stat-chip sky">
+                            <span id="summary-vlans" class="value">--</span>
+                            <span class="label">Active VLANs</span>
                         </div>
                     </div>
-                    <div class="h-0 border-t border-dashed border-gray-600 w-full mb-2"></div>
-                </div>
-                
-                <div class="flex-1 bg-[#1a2130] rounded-xl p-6 shadow-2xl border border-[#374151]/50 flex flex-col">
-                    <h2 class="text-lg font-semibold mb-4 text-white/90">VLAN &amp; SIEM Status</h2>
-                    
-                    <div class="space-y-3 mb-4">
-                        <div class="pb-2 border-b border-dashed border-gray-600/70">
-                            <span class="text-sm text-gray-400">Current VLAN Selected: <span id="vlan-display" class="font-bold text-white">--</span></span>
-                        </div>
-                        <div class="pb-2 border-b border-dashed border-gray-600/70">
-                            <span class="text-sm text-gray-400">Threat Count (Active): <span class="font-bold text-yellow-400" id="threat-count">-- Alerts</span></span>
-                        </div>
-                        <div class="pb-2 border-b border-dashed border-gray-600/70">
-                            <span class="text-sm text-gray-400">Active Endpoints: <span class="font-bold text-green-400" id="endpoint-count">--</span></span>
-                        </div>
+
+                    <div class="vlan-device-header">
+                        <h3 class="vlan-device-title">VLAN Device List</h3>
+                        <span id="device-count" class="vlan-device-count"></span>
                     </div>
-                    
-                    <div class="grid grid-cols-3 gap-3 text-center text-xs text-gray-400 mb-4">
-                        <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
-                            <div class="text-emerald-300 text-lg font-bold" id="summary-endpoints">--</div>
-                            <p>Total Endpoints</p>
-                        </div>
-                        <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
-                            <div class="text-amber-300 text-lg font-bold" id="summary-threats">--</div>
-                            <p>Total Threats</p>
-                        </div>
-                        <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
-                            <div class="text-sky-300 text-lg font-bold" id="summary-vlans">--</div>
-                            <p>Active VLANs</p>
-                        </div>
+                    <div class="vlan-device-cols">
+                        <span>Type</span>
+                        <span>IP Address</span>
+                        <span>Last Seen</span>
+                        <span class="col-action">Actions</span>
                     </div>
-                    
-                    <h3 class="text-md font-semibold text-white/90 mb-2 mt-2 flex items-center justify-between">
-                        VLAN Device List
-                        <span class="text-xs text-slate-400 font-normal" id="device-count"></span>
-                    </h3>
-                    <div class="flex justify-between text-xs text-gray-400 border-b border-gray-700 pb-1 mb-2 font-medium uppercase">
-                        <span class="w-1/4">Type</span>
-                        <span class="w-1/4">IP Address</span>
-                        <span class="w-1/4">Last Seen</span>
-                        <span class="w-1/4 text-right">Actions</span>
-                    </div>
-                    <div id="device-list" class="flex-1 overflow-y-scroll custom-scroll space-y-3 pr-2 text-sm text-gray-300">
-                        <p class="text-gray-500 text-center">Gathering endpoints...</p>
+                    <div id="device-list" class="vlan-device-list">
+                        <p class="vlan-empty">Gathering endpoints...</p>
                     </div>
                 </div>
-            </div>
-            
-            <div class="lg:col-span-2 flex flex-col space-y-6">
-                <div class="flex-1 bg-[#1a2130] rounded-xl shadow-2xl p-6 relative overflow-hidden border border-[#374151]/50 flex flex-col">
-                    <h2 class="text-lg font-semibold text-white/90 mb-2">VLAN Performance Metrics: <span id="graph-vlan-display">--</span></h2>
-                    <div class="flex gap-4 text-sm text-gray-400 mb-3 flex-wrap" id="traffic-summary"></div>
-                    <div class="flex-1 relative">
-                        <div class="graph-axis"></div>
-                        <div class="absolute inset-0 flex items-center justify-center text-xl text-gray-600 font-light text-center p-10">
-                            Traffic &amp; Latency data refreshes every few seconds. Polling live VLAN statistics...
-                        </div>
+            </aside>
+
+            <main class="vlan-card vlan-metrics-card">
+                <div class="vlan-card-body">
+                    <h2 class="vlan-metrics-title">VLAN Performance Metrics: <span id="graph-vlan-display">--</span></h2>
+                    <div id="traffic-summary" class="vlan-traffic-summary"></div>
+                    <div class="vlan-graph-area" id="vlan-graph-area">
+                        <div class="vlan-graph-axis" style="position:absolute;top:20px;left:20px;right:20px;bottom:20px;"></div>
+                        <p class="vlan-graph-placeholder" id="vlan-graph-placeholder">
+                            Traffic &amp; latency data refresh every few seconds. Polling live VLAN statistics…
+                        </p>
                     </div>
                 </div>
-                
-                <div class="h-40 bg-[#1a2130] rounded-xl shadow-xl p-4 flex flex-col justify-center border border-[#374151]/50">
-                    <h3 class="text-sm font-medium text-white/70 mb-2">Critical Alerts Summary</h3>
-                    <div id="alerts-container" class="space-y-2">
-                        <p class="text-gray-500 text-sm">Awaiting data...</p>
+                <div class="vlan-card vlan-alerts-card">
+                    <h3 class="vlan-alerts-title">Critical Alerts Summary</h3>
+                    <div id="alerts-container" class="vlan-alerts-list">
+                        <p class="vlan-empty vlan-empty-sm">Awaiting data…</p>
                     </div>
                 </div>
-            </div>
+            </main>
         </div>
     </div>
     
@@ -180,7 +130,7 @@
             menu.innerHTML = '';
             if (!Array.isArray(window.vlanState) || window.vlanState.length === 0) {
                 const empty = document.createElement('div');
-                empty.className = 'px-4 py-2 text-sm text-gray-400';
+                empty.className = 'vlan-empty vlan-empty-sm';
                 empty.textContent = 'No VLAN data available';
                 menu.appendChild(empty);
                 return;
@@ -188,7 +138,7 @@
             window.vlanState.forEach(vlan => {
                 const item = document.createElement('a');
                 item.href = '#';
-                item.className = 'block px-4 py-2 text-sm text-gray-300 hover:bg-sky-500/30';
+                item.className = 'vlan-dropdown-item';
                 item.textContent = vlan.name || vlan.cidr;
                 item.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -215,7 +165,7 @@
         function renderDeviceList(vlan) {
             const container = document.getElementById('device-list');
             if (!vlan || !Array.isArray(vlan.endpoints) || vlan.endpoints.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-center">No endpoints detected for this VLAN.</p>';
+                container.innerHTML = '<p class="vlan-empty">No endpoints detected for this VLAN.</p>';
                 document.getElementById('endpoint-count').textContent = '0';
                 document.getElementById('device-count').textContent = '';
                 return;
@@ -225,14 +175,14 @@
             container.innerHTML = '';
             vlan.endpoints.slice(0, 25).forEach(endpoint => {
                 const row = document.createElement('div');
-                row.className = 'flex justify-between text-sm hover:bg-gray-700/30 p-1 rounded-md transition duration-150 items-center';
+                row.className = 'vlan-device-row';
                 const ip = endpoint.ip || '';
                 row.innerHTML = `
-                    <span class="w-1/4 font-semibold text-blue-200">${endpoint.type || 'Host'}</span>
-                    <span class="w-1/4 text-gray-200">${ip}</span>
-                    <span class="w-1/4 text-gray-500 text-xs">${formatTime(endpoint.last_seen)}</span>
-                    <span class="w-1/4 text-right">
-                        <button class="px-2 py-1 bg-red-600 hover:bg-red-500 text-white text-xs rounded-md" data-ip="${ip}">Contain</button>
+                    <span class="type">${endpoint.type || 'Host'}</span>
+                    <span class="ip">${ip}</span>
+                    <span class="time">${formatTime(endpoint.last_seen)}</span>
+                    <span class="col-action">
+                        <button type="button" class="vlan-btn-contain" data-ip="${ip}">Contain</button>
                     </span>
                 `;
                 const btn = row.querySelector('button');
@@ -250,10 +200,13 @@
         
         function renderAlerts(vlan) {
             const container = document.getElementById('alerts-container');
+            const containmentLog = document.getElementById('containment-log');
+            if (containmentLog) containmentLog.remove();
             container.innerHTML = '';
             if (!vlan || !Array.isArray(vlan.alert_bars) || vlan.alert_bars.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-sm">No alerts for this VLAN.</p>';
+                container.innerHTML = '<p class="vlan-empty vlan-empty-sm">No alerts for this VLAN.</p>';
                 document.getElementById('threat-count').textContent = '0 Alerts';
+                if (containmentLog) container.appendChild(containmentLog);
                 return;
             }
             document.getElementById('threat-count').textContent = `${vlan.threat_count ?? 0} Alerts`;
@@ -261,28 +214,30 @@
                 const maxWidth = Math.min(100, (item.count || 0) * 4);
                 const wrapper = document.createElement('div');
                 wrapper.innerHTML = `
-                    <div class="flex justify-between text-sm text-gray-400 mb-1">
+                    <div class="vlan-alert-row">
                         <span>${item.type}</span>
-                        <span class="font-bold">${item.count}</span>
+                        <span class="count">${item.count}</span>
                     </div>
-                    <div class="h-2 rounded-full transition-all duration-500" style="background-color:${item.color}; width:${maxWidth}%; max-width:100%;"></div>
+                    <div class="vlan-alert-bar">
+                        <div class="vlan-alert-bar-fill" style="background-color:${item.color}; width:${maxWidth}%;"></div>
+                    </div>
                 `;
                 container.appendChild(wrapper);
             });
+            if (containmentLog) container.appendChild(containmentLog);
         }
         
         function renderTraffic(vlan) {
             const container = document.getElementById('traffic-summary');
             container.innerHTML = '';
             if (!vlan || !vlan.traffic) {
-                container.innerHTML = '<span class="text-xs text-gray-500">No traffic data.</span>';
+                container.innerHTML = '<span class="vlan-empty vlan-empty-sm">No traffic data.</span>';
                 return;
             }
-            // Show VLAN-calculated traffic categories first
             Object.entries(vlan.traffic).forEach(([key, value]) => {
                 const badge = document.createElement('div');
-                badge.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
-                badge.innerHTML = `<span class="text-gray-400 capitalize">${key}</span><div class="text-white font-bold text-base">${value}</div>`;
+                badge.className = 'vlan-traffic-badge';
+                badge.innerHTML = `<span class="label">${key}</span><span class="value">${value}</span>`;
                 container.appendChild(badge);
             });
 
@@ -351,29 +306,29 @@
                     }
 
                     const hostBadge = document.createElement('div');
-                    hostBadge.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
-                    hostBadge.innerHTML = `<span class="text-gray-400">host sent</span><div class="text-white font-bold text-base">${(sent/1024).toFixed(1)} KB</div><div class="text-gray-400 text-xs">${kbpsSent !== null ? kbpsSent.toFixed(1) + ' KB/s' : ''}</div>`;
+                    hostBadge.className = 'vlan-traffic-badge';
+                    hostBadge.innerHTML = `<span class="label">host sent</span><span class="value">${(sent/1024).toFixed(1)} KB</span><div class="label">${kbpsSent !== null ? kbpsSent.toFixed(1) + ' KB/s' : ''}</div>`;
                     container.appendChild(hostBadge);
 
                     const hostBadge2 = document.createElement('div');
-                    hostBadge2.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
-                    hostBadge2.innerHTML = `<span class="text-gray-400">host recv</span><div class="text-white font-bold text-base">${(recv/1024).toFixed(1)} KB</div><div class="text-gray-400 text-xs">${kbpsRecv !== null ? kbpsRecv.toFixed(1) + ' KB/s' : ''}</div>`;
+                    hostBadge2.className = 'vlan-traffic-badge';
+                    hostBadge2.innerHTML = `<span class="label">host recv</span><span class="value">${(recv/1024).toFixed(1)} KB</span><div class="label">${kbpsRecv !== null ? kbpsRecv.toFixed(1) + ' KB/s' : ''}</div>`;
                     container.appendChild(hostBadge2);
 
                     const devBadge = document.createElement('div');
-                    devBadge.className = 'bg-slate-800/70 rounded-lg px-3 py-2 border border-slate-700 text-xs';
-                    devBadge.innerHTML = `<span class="text-gray-400">discovered</span><div class="text-white font-bold text-base">${devices}</div>`;
+                    devBadge.className = 'vlan-traffic-badge';
+                    devBadge.innerHTML = `<span class="label">discovered</span><span class="value">${devices}</span>`;
                     container.appendChild(devBadge);
 
-                    // If history is available, draw a dynamic sparkline (uses last 60 entries)
                     if (Array.isArray(hist) && hist.length) {
                         const slice = hist.slice(-60);
                         const canvas = document.createElement('canvas');
                         canvas.width = 240;
                         canvas.height = 48;
-                        canvas.className = 'rounded-md';
+                        canvas.style.borderRadius = '6px';
                         const wrapper = document.createElement('div');
-                        wrapper.className = 'bg-[#0b1220] p-2 rounded-md border border-[#374151]';
+                        wrapper.className = 'vlan-traffic-badge';
+                        wrapper.style.minWidth = '260px';
                         wrapper.appendChild(canvas);
                         container.appendChild(wrapper);
 
@@ -408,6 +363,63 @@
             } catch (e) {
                 console.error('Error rendering host metrics', e);
             }
+        }
+
+        // Draws main network performance chart (bytes over time) using Python Network stats_history
+        function renderNetworkGraph() {
+            const area = document.getElementById('vlan-graph-area');
+            if (!area) return;
+            const placeholder = document.getElementById('vlan-graph-placeholder');
+            const net = window.vlanNetwork || {};
+            const hist = Array.isArray(net.stats_history) ? net.stats_history : null;
+
+            if (!hist || hist.length < 2) {
+                if (placeholder) placeholder.style.display = 'flex';
+                const existing = document.getElementById('vlan-graph-canvas');
+                if (existing) existing.style.display = 'none';
+                return;
+            }
+
+            let canvas = document.getElementById('vlan-graph-canvas');
+            if (!canvas) {
+                canvas = document.createElement('canvas');
+                canvas.id = 'vlan-graph-canvas';
+                area.appendChild(canvas);
+            }
+            if (placeholder) placeholder.style.display = 'none';
+            canvas.style.display = 'block';
+
+            const rect = area.getBoundingClientRect();
+            const paddingX = 20;
+            const paddingY = 20;
+            const width = Math.max(260, rect.width - paddingX * 2);
+            const height = Math.max(160, rect.height - paddingY * 2);
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            const slice = hist.slice(-120);
+            const sentArr = slice.map(x => (x.bytes_sent || 0));
+            const recvArr = slice.map(x => (x.bytes_recv || 0));
+            const maxVal = Math.max(...sentArr, ...recvArr, 1);
+
+            ctx.clearRect(0, 0, width, height);
+
+            function drawSeries(arr, color) {
+                ctx.beginPath();
+                arr.forEach((v, i) => {
+                    const x = (i / (arr.length - 1 || 1)) * (width - 2);
+                    const y = height - (v / maxVal) * (height - 4);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Sent = blue, Recv = teal
+            drawSeries(sentArr, '#3b82f6');
+            drawSeries(recvArr, '#14b8a6');
         }
         
         function selectVlan(name) {
@@ -445,6 +457,7 @@
                 }
                 updateSummary();
                 buildDropdown();
+                renderNetworkGraph();
                 if (currentVlanName) {
                     const exists = window.vlanState.find(v => v.name === currentVlanName);
                     if (exists) {
@@ -462,6 +475,7 @@
             updateSummary();
             buildDropdown();
             selectVlan(window.vlanState.length ? window.vlanState[0].name : null);
+            renderNetworkGraph();
 
     async function sendContainmentAction(ip) {
         try {
@@ -491,7 +505,6 @@
             const container = document.getElementById('alerts-container');
             const addLogSection = document.createElement('div');
             addLogSection.id = 'containment-log';
-            addLogSection.className = 'mt-2 text-xs text-gray-300';
             container.appendChild(addLogSection);
 
             setInterval(() => {
@@ -499,14 +512,13 @@
                 if (!logEl) return;
                 const executed = (window.vlanNetwork && window.vlanNetwork.executed_actions) || [];
                 if (!executed.length) {
-                    logEl.innerHTML = '<p class="text-gray-500">No containment actions executed.</p>';
+                    logEl.innerHTML = '<p class="vlan-empty vlan-empty-sm">No containment actions executed.</p>';
                     return;
                 }
                 logEl.innerHTML = '';
                 executed.slice(-6).reverse().forEach(a => {
                     const row = document.createElement('div');
-                    row.className = 'flex justify-between items-center gap-2';
-                    row.innerHTML = `<span class="text-sm">${a.ip} &nbsp;<span class="text-xs text-gray-400">(${a.status})</span></span><span class="text-xs text-gray-400">${a.executed_at || a.requested_at}</span>`;
+                    row.innerHTML = `<span>${a.ip} <span style="color:var(--vlan-text-muted)">(${a.status})</span></span><span style="font-size:0.8rem;color:var(--vlan-text-muted)">${a.executed_at || a.requested_at}</span>`;
                     logEl.appendChild(row);
                 });
             }, 5000);

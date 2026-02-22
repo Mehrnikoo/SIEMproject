@@ -12,23 +12,25 @@ $severity_map_json = json_encode($severity_map);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web SIEM Geolocation Dashboard</title>
     
-    <!-- --- NEW: LCP Optimization --- -->
-    <!-- Tells the browser to resolve the map tile domain's IP address ASAP -->
+    <!-- LCP: preconnect to external origins (map loads later) -->
     <link rel="dns-prefetch" href="https://tiles.stadiamaps.com">
-    
-    <!-- Load Inter Font -->
+    <link rel="preconnect" href="https://tiles.stadiamaps.com" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="dns-prefetch" href="https://unpkg.com">
     
-    <!-- Load Leaflet Map CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <!-- Note: Using 1.9.4 for stability. Latest version may have fixes but we suppress warnings below -->
+    <!-- Non-blocking font: first paint uses system font, then Inter swaps in -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"></noscript>
+    
+    <!-- Non-blocking Leaflet CSS so LCP isn't delayed by map styles -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'" crossorigin="">
+    <noscript><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""></noscript>
     
     <style>
-        /* General Styles */
+        /* Critical: above-the-fold uses system font until Inter loads */
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
             margin: 0;
             padding: 0;
             background-color: #1e293b; 
@@ -125,6 +127,19 @@ $severity_map_json = json_encode($severity_map);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             background-color: #0a2340; /* Deep Navy/Dark Blue for 'Ocean' */
         }
+        /* Placeholder shown until map tiles load (avoids map tile as LCP) */
+        .map-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 1rem;
+            z-index: 1;
+            pointer-events: none;
+        }
+        #map.map-ready .map-placeholder { display: none; }
         
         #attackCanvas {
             position: absolute;
@@ -541,7 +556,8 @@ $severity_map_json = json_encode($severity_map);
                         <button id="ipSearchButton" class="ip-search-button">Whois Lookup</button>
                     </div>
                 </div>
-                <div id="map">
+                <div id="map" aria-busy="true">
+                    <div id="map-placeholder" class="map-placeholder">Loading map…</div>
                     <canvas id="attackCanvas"></canvas>
                 </div>
             </div>
@@ -620,38 +636,21 @@ $severity_map_json = json_encode($severity_map);
         </div>
     </div>
 
-    <!-- Load Leaflet Map JavaScript -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    
-    <!-- Suppress harmless Leaflet deprecation warnings -->
-    <script>
-        // Suppress Firefox-specific deprecation warnings from Leaflet.js
-        // These are harmless warnings from Leaflet's internal code
-        const originalWarn = console.warn;
-        console.warn = function(...args) {
-            const message = args.join(' ');
-            // Filter out the specific deprecation warnings from Leaflet
-            if (message.includes('mozPressure') || message.includes('mozInputSource')) {
-                return; // Suppress these warnings
-            }
-            // Allow all other warnings to pass through
-            originalWarn.apply(console, args);
-        };
-    </script>
-    
-    <!-- Inject PHP data into a global JS object -->
+    <!-- Defer map scripts so parsing and first paint aren't blocked -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
     <script>
         window.siemData = {
             homeLocation: <?php echo $home_location_json; ?>,
             realEvents: <?php echo $event_data_json; ?>,
             simEvents: <?php echo $sim_event_data_json; ?>,
             mostCommonCountry: <?php echo json_encode($most_common_country); ?>,
-            severityMap: <?php echo $severity_map_json; ?> 
+            severityMap: <?php echo $severity_map_json; ?>
         };
     </script>
-    
-    <!-- Load the external JavaScript file that uses window.siemData -->
-    <script src="public/assets/js/map.js"></script>
+    <script src="public/assets/js/map.js" defer></script>
+    <script>
+        (function(){ var w=console.warn; console.warn=function(){ var m=arguments.length?Array.prototype.join.call(arguments,' '):''; if(m.indexOf('mozPressure')===-1&&m.indexOf('mozInputSource')===-1) w.apply(console,arguments); }; })();
+    </script>
 </body>
 </html>
 

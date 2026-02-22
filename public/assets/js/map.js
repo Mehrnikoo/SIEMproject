@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let eventLayer = null;
     let traceLayer = null;
     const markersById = {};
+    let map = null; // Set when map is initialized (deferred for LCP)
 
     // Panel Management Elements
     const eventListContainer = document.getElementById('eventListContainer');
@@ -71,21 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentEventForTrace = null; // Store the selected event
     let whoisMarker = null; // Store marker for searched IP
 
-    // --- 2. LEAFLET MAP INITIALIZATION ---
-    const map = L.map('map', {
-        center: (homeLat !== 0 || homeLon !== 0) ? homeCoords : [20, 0],
-        zoom: (homeLat !== 0 || homeLon !== 0) ? 3 : 2
-    });
-
-    L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors',
-        maxZoom: 18,
-        id: 'stamen-toner-dark'
-    }).addTo(map);
-
-    eventLayer = L.layerGroup().addTo(map);
-    traceLayer = L.layerGroup().addTo(map);
-
     function addHomeMarker() {
          if (homeLat !== 0 || homeLon !== 0) {
             L.marker(homeCoords, {
@@ -104,6 +90,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 `</div>`
             ).openPopup();
         }
+    }
+
+    /** Deferred map init so LCP is not the map tile (summary/event list paint first). */
+    function initMapDeferred() {
+        map = L.map('map', {
+            center: (homeLat !== 0 || homeLon !== 0) ? homeCoords : [20, 0],
+            zoom: (homeLat !== 0 || homeLon !== 0) ? 3 : 2
+        });
+        L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors',
+            maxZoom: 18,
+            id: 'stamen-toner-dark'
+        }).addTo(map);
+        eventLayer = L.layerGroup().addTo(map);
+        traceLayer = L.layerGroup().addTo(map);
+        map.whenReady(function () {
+            mapContainer.classList.add('map-ready');
+            mapContainer.removeAttribute('aria-busy');
+        });
+        addHomeMarker();
     }
     
     // --- 3. CANVAS DRAWING LOGIC ---
@@ -213,14 +219,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 4. EVENT LIST AND UI LOGIC ---
 
     function clearLeafletMarkers() {
+        if (!eventLayer) return;
         eventLayer.clearLayers();
         for (const k in markersById) delete markersById[k];
         addHomeMarker();
     }
 
     function renderEvents(list) {
+        currentEventsToDraw = list || [];
+        if (!map || !eventLayer) {
+            if (list) populateEventList(sortEvents(list, currentSortMode));
+            return;
+        }
         clearLeafletMarkers();
-        currentEventsToDraw = list;
         if (!list) return;
         
         // Draw markers for current list
@@ -377,6 +388,9 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(item);
         });
     }
+
+    // Paint event list immediately so LCP is not the map tile
+    populateEventList(sortEvents(realEvents, 'severity_desc'));
 
     // --- 5. PANEL MANAGEMENT & TRACE LOGIC ---
 
@@ -798,107 +812,108 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     
-    // --- 6. INITIALIZATION & TAB CONTROLS ---
-    
-    const tabReal = document.getElementById('tabReal');
-    const tabSim = document.getElementById('tabSim');
+    // --- 6. INITIALIZATION & TAB CONTROLS (after map is ready) ---
+    function runAfterMapReady() {
+        const tabReal = document.getElementById('tabReal');
+        const tabSim = document.getElementById('tabSim');
 
-    function setActiveTab(showSim) {
-        showEventListPanel();
-        clearWhoisMarker();
-        if (showSim) {
-            tabSim.classList.add('active');
-            tabReal.classList.remove('active');
-            refreshCurrentList();
-        } else {
-            tabReal.classList.add('active');
-            tabSim.classList.remove('active');
-            refreshCurrentList();
-        }
-    }
-
-    tabReal.addEventListener('click', () => setActiveTab(false));
-    tabSim.addEventListener('click', () => setActiveTab(true));
-    
-    traceRouteButton.addEventListener('click', handleTraceRoute);
-    backToEventsButton.addEventListener('click', showEventListPanel);
-    backToEventsFromWhoisButton.addEventListener('click', showEventListPanel);
-    
-    // Whois lookup handlers
-    ipSearchButton.addEventListener('click', handleWhoisLookup);
-    ipSearchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            handleWhoisLookup();
-        }
-    });
-
-    map.on('zoom move', animate);
-    map.on('resize', resizeCanvas);
-    
-    // Initial setup
-    resizeCanvas();
-    setActiveTab(false);
-    animate();
-
-    // --- 7. REAL EVENTS POLLING & NOTIFICATIONS ---
-    const knownRealEventIds = new Set((realEvents || []).map(e => e.id).filter(id => id !== undefined && id !== null));
-
-    // Ask for notification permission once
-    if ('Notification' in window && Notification.permission === 'default') {
-        try { Notification.requestPermission(); } catch (_) {}
-    }
-
-    function playAlertSound() {
-        try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 tone
-            gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-            oscillator.connect(gain).connect(audioCtx.destination);
-            oscillator.start();
-            // Quick envelope
-            gain.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.35);
-            oscillator.stop(audioCtx.currentTime + 0.4);
-        } catch (e) {
-            // Ignore sound errors
-        }
-    }
-
-    function showBrowserNotification(title, body) {
-        if (!('Notification' in window)) return;
-        if (Notification.permission === 'granted') {
-            new Notification(title, { body });
-        }
-    }
-
-    async function pollRealEvents() {
-        try {
-            const res = await fetch('index.php?action=real_events_summary', { cache: 'no-store' });
-            if (!res.ok) return;
-            const data = await res.json();
-            if (!data || !Array.isArray(data.ids)) return;
-
-            // Find newly observed IDs
-            const newIds = data.ids.filter(id => !knownRealEventIds.has(id));
-            if (newIds.length > 0) {
-                // Update known IDs
-                newIds.forEach(id => knownRealEventIds.add(id));
-
-                // Alert user
-                playAlertSound();
-                const title = 'New Security Event' + (newIds.length > 1 ? 's' : '');
-                const body = `${newIds.length} new event${newIds.length > 1 ? 's' : ''} detected in Real Events.`;
-                showBrowserNotification(title, body);
+        function setActiveTab(showSim) {
+            showEventListPanel();
+            clearWhoisMarker();
+            if (showSim) {
+                tabSim.classList.add('active');
+                tabReal.classList.remove('active');
+                refreshCurrentList();
+            } else {
+                tabReal.classList.add('active');
+                tabSim.classList.remove('active');
+                refreshCurrentList();
             }
-        } catch (_) {
-            // Ignore polling errors
         }
+
+        tabReal.addEventListener('click', () => setActiveTab(false));
+        tabSim.addEventListener('click', () => setActiveTab(true));
+        
+        traceRouteButton.addEventListener('click', handleTraceRoute);
+        backToEventsButton.addEventListener('click', showEventListPanel);
+        backToEventsFromWhoisButton.addEventListener('click', showEventListPanel);
+        
+        ipSearchButton.addEventListener('click', handleWhoisLookup);
+        ipSearchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleWhoisLookup();
+            }
+        });
+
+        map.on('zoom move', animate);
+        map.on('resize', resizeCanvas);
+        
+        resizeCanvas();
+        setActiveTab(false);
+        animate();
+
+        // --- 7. REAL EVENTS POLLING & NOTIFICATIONS ---
+        const knownRealEventIds = new Set((realEvents || []).map(e => e.id).filter(id => id !== undefined && id !== null));
+
+        if ('Notification' in window && Notification.permission === 'default') {
+            try { Notification.requestPermission(); } catch (_) {}
+        }
+
+        function playAlertSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+                oscillator.connect(gain).connect(audioCtx.destination);
+                oscillator.start();
+                gain.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.35);
+                oscillator.stop(audioCtx.currentTime + 0.4);
+            } catch (e) {}
+        }
+
+        function showBrowserNotification(title, body) {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'granted') {
+                new Notification(title, { body });
+            }
+        }
+
+        async function pollRealEvents() {
+            try {
+                const res = await fetch('index.php?action=real_events_summary', { cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data || !Array.isArray(data.ids)) return;
+
+                const newIds = data.ids.filter(id => !knownRealEventIds.has(id));
+                if (newIds.length > 0) {
+                    newIds.forEach(id => knownRealEventIds.add(id));
+                    playAlertSound();
+                    const title = 'New Security Event' + (newIds.length > 1 ? 's' : '');
+                    const body = `${newIds.length} new event${newIds.length > 1 ? 's' : ''} detected in Real Events.`;
+                    showBrowserNotification(title, body);
+                }
+            } catch (_) {}
+        }
+
+        setInterval(pollRealEvents, 10000);
     }
 
-    // Start polling every 10 seconds
-    setInterval(pollRealEvents, 10000);
+    // Defer map init so LCP is summary/event list, not map tile
+    if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(function () {
+            initMapDeferred();
+            runAfterMapReady();
+        }, { timeout: 2000 });
+    } else {
+        setTimeout(function () {
+            initMapDeferred();
+            runAfterMapReady();
+        }, 1);
+    }
 });
 
