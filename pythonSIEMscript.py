@@ -35,6 +35,10 @@ SIEM_PORT = 5555
 PHP_API_ENABLED = True  # Send events to PHP API
 PHP_API_URL = "http://localhost/SIEMproject/api.php/security-events"
 
+# [LOGSTASH SYSLOG CONFIG]
+LOGSTASH_HOST = "127.0.0.1"
+LOGSTASH_PORT = 10514
+
 
 # ==========================================
 #           BASE CLASS: LOGS
@@ -140,6 +144,25 @@ class Read_logs(Logs):
         except Exception as e:
             print(f"[Error] Tailing file {filepath}: {e}")
 
+            
+    def forward_to_syslog(self, source, data):
+        """Broadcasts fetched logs to the Logstash Syslog server."""
+        try:
+            # Standard Syslog format: <Priority>Timestamp Hostname Tag: Message
+            timestamp = datetime.now().strftime("%b %d %H:%M:%S")
+            hostname = socket.gethostname()
+            message = json.dumps(data) if isinstance(data, dict) else str(data)
+            
+            syslog_msg = f"<34>{timestamp} {hostname} {source}: {message}"
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(syslog_msg.encode('utf-8'), (LOGSTASH_HOST, LOGSTASH_PORT))
+            sock.close()
+        except Exception:
+            pass # Don't let a network blip crash your script
+
+
+
     # --- WORKER: Tail a Command (Linux/macOS) ---
     def _tail_command(self, cmd_list, source_tag):
         """
@@ -191,48 +214,46 @@ class Read_logs(Logs):
 
     def process_and_store_logs(self):
         """
-        Main Thread calls this to 'drain' the queue of whatever 
-        has arrived since the last check.
+        Main Thread calls this to 'drain' the queue and forward to Logstash.
         """
         parsed_data = []
         
-        # Drain the queue
         while not self.log_queue.empty():
             try:
+                # Use get_nowait() inside a try block to prevent crashes
                 source, raw_data = self.log_queue.get_nowait()
                 
-                # --- Normalization Logic ---
                 log_entry = None
                 
-                # 1. JSON Sources (Journalctl, macOS log, Windows Poll)
+                # --- [START] YOUR EXISTING PARSING LOGIC ---
                 if source in ['linux_system', 'macos_system', 'windows_system']:
-                    if isinstance(raw_data, dict):
-                        log_entry = raw_data
-                    else:
-                        try:
-                            log_entry = json.loads(raw_data)
-                        except json.JSONDecodeError:
-                            continue # Skip malformed lines (often headers)
-
-                # 2. Text Sources (Nginx/Apache/Network) -> Regex Parsing
+                    log_entry = raw_data if isinstance(raw_data, dict) else json.loads(raw_data)
                 elif source == 'nginx_access':
                     log_entry = self._parse_nginx(raw_data)
                 elif source == 'apache_access':
                     log_entry = self._parse_apache(raw_data)
                 elif source == 'linux_network':
-                    log_entry = {'message': raw_data, 'raw': raw_data} # Raw storage for now
+                    log_entry = {'message': raw_data}
+                # --- [END] YOUR EXISTING PARSING LOGIC ---
 
                 if log_entry:
+                    # FORWARD TO LOGSTASH (SYSLOG)
+                    self.forward_to_syslog(source, log_entry)
+                    
                     parsed_data.append({'source': source, 'data': log_entry})
 
             except queue.Empty:
-                break
+                break # Queue became empty unexpectedly, exit loop safely
+            except Exception as e:
+                print(f"[Error] Processing log from {source}: {e}")
+                continue # Skip this one log and keep the script running
 
-        # Save to disk
+        # Save to local files as well
         if parsed_data:
             self.store_to_files(parsed_data)
             
         return parsed_data
+
 
     def _parse_nginx(self, line):
         # Nginx Combined Format
@@ -308,6 +329,27 @@ class Sort_event(Logs):
         }
         return severity_map.get(attack_type, "Low 🔵")
 
+    def send_to_logstash_alert(self, log_object):
+        """
+        Sends the security alert to Logstash Syslog with high priority.
+        """
+        try:
+            # Change priority based on severity
+            priority = "<32>" if "Critical" in log_object["severity_sticker"] else "<33>"
+            timestamp = datetime.now().strftime("%b %d %H:%M:%S")
+            hostname = socket.gethostname()
+            
+            # Create a structured message
+            message = json.dumps(log_object)
+            syslog_msg = f"{priority}{timestamp} {hostname} SIEM_ALERT: {message}"
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(syslog_msg.encode('utf-8'), ("127.0.0.1", 10514))
+            sock.close()
+        except Exception:
+            pass
+
+
     def log_security_event(self, attack_type, source_ip, target_ip, details, remote_reporter_ip=None):
         severity = self.classify_severity(attack_type)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -338,6 +380,7 @@ class Sort_event(Logs):
         }
 
         self.save_to_json(log_object)
+        self.send_to_logstash_alert(log_object)
         print(f"\n[{severity}] {entry_id} {'(REMOTE)' if remote_reporter_ip else ''}")
         print(formatted_message)
         self.event_counter += 1

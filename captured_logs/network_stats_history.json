@@ -16,5 +16,119 @@
         "private_ip": "10.141.84.24",
         "bytes_sent": 200762731,
         "bytes_recv": 288747947
+    },
+    {
+        "timestamp": "2026-02-24 15:51:17",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 282837177,
+        "bytes_recv": 302926007
+    },
+    {
+        "timestamp": "2026-02-24 15:51:32",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 283150005,
+        "bytes_recv": 303190975
+    },
+    {
+        "timestamp": "2026-02-24 15:51:47",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 283231410,
+        "bytes_recv": 303271718
+    },
+    {
+        "timestamp": "2026-02-24 15:52:03",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 284225302,
+        "bytes_recv": 303833568
+    },
+    {
+        "timestamp": "2026-02-24 15:52:18",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 284741835,
+        "bytes_recv": 304223495
+    },
+    {
+        "timestamp": "2026-02-24 15:52:33",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 286093904,
+        "bytes_recv": 305271076
+    },
+    {
+        "timestamp": "2026-02-24 15:52:49",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 286568605,
+        "bytes_recv": 305565209
+    },
+    {
+        "timestamp": "2026-02-24 15:53:04",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 286637170,
+        "bytes_recv": 305634296
+    },
+    {
+        "timestamp": "2026-02-24 15:53:19",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 286710664,
+        "bytes_recv": 305705350
+    },
+    {
+        "timestamp": "2026-02-24 15:53:35",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 286830454,
+        "bytes_recv": 305814392
+    },
+    {
+        "timestamp": "2026-02-24 15:53:50",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 286896025,
+        "bytes_recv": 305882527
+    },
+    {
+        "timestamp": "2026-02-24 15:54:05",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 287031434,
+        "bytes_recv": 306035468
+    },
+    {
+        "timestamp": "2026-02-24 15:59:29",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 290468075,
+        "bytes_recv": 309328775
+    },
+    {
+        "timestamp": "2026-02-24 15:59:45",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 290635913,
+        "bytes_recv": 309478259
+    },
+    {
+        "timestamp": "2026-02-24 16:05:25",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 295477095,
+        "bytes_recv": 313066058
+    },
+    {
+        "timestamp": "2026-02-24 16:05:40",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 295626662,
+        "bytes_recv": 313200910
+    },
+    {
+        "timestamp": "2026-02-24 16:07:05",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 297153940,
+        "bytes_recv": 314183527
+    },
+    {
+        "timestamp": "2026-02-24 16:07:20",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 297278807,
+        "bytes_recv": 314294110
+    },
+    {
+        "timestamp": "2026-02-24 16:07:36",
+        "private_ip": "10.134.52.58",
+        "bytes_sent": 297463414,
+        "bytes_recv": 314639055
     }
 ]
