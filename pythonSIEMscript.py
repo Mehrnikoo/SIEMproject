@@ -578,9 +578,19 @@ class Parse_logs(Logs):
 class Network(Logs):
     def __init__(self):
         super().__init__()
-        self.private_ip = self.get_private_ip()
+        self._private_ip = self.get_private_ip()
+        self._last_ip_check = time.time()
+        self.persist_server_status()  # Initial persistence
+
+    @property
+    def private_ip(self):
+        """Get the current private IP, refreshing if it's been more than 5 minutes since last check."""
+        if time.time() - self._last_ip_check > 300:  # 5 minutes
+            self.update_private_ip()
+        return self._private_ip
 
     def get_private_ip(self):
+        """Fetch the current private IP address."""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
@@ -589,6 +599,35 @@ class Network(Logs):
             return ip
         except Exception:
             return "127.0.0.1"
+
+    def update_private_ip(self):
+        """Update the stored private IP address with the current value."""
+        old_ip = self._private_ip
+        self._private_ip = self.get_private_ip()
+        self._last_ip_check = time.time()
+        
+        if old_ip != self._private_ip:
+            print(f"[Network] Private IP updated: {old_ip} -> {self._private_ip}")
+            self.persist_server_status()
+        
+        return self._private_ip
+
+    def force_refresh_private_ip(self):
+        """Force refresh the private IP immediately, regardless of timing."""
+        return self.update_private_ip()
+
+    def persist_server_status(self):
+        """Persist the current server status including private IP to server_status.json"""
+        try:
+            status = {
+                'private_ip': self.private_ip,
+                'last_update': datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
+            }
+            with open('server_status.json', 'w') as f:
+                json.dump(status, f, indent=4)
+            print(f"[Network] Server status updated: {status}")
+        except Exception as e:
+            print(f"[Network] Failed to persist server status: {e}")
 
     def scan_network(self):
         print("\n--- Network Device Scan (ARP) ---")
@@ -827,9 +866,19 @@ if __name__ == "__main__":
     print("Opening Network Traffic Window...")
     # Start a background thread to persist network scans, traffic stats, and handle containment actions
     def network_maintenance_loop():
+        ip_check_counter = 0
         try:
             while True:
                 try:
+                    # Refresh private IP every 20 cycles (every 5 minutes at 15s intervals)
+                    ip_check_counter += 1
+                    if ip_check_counter >= 20:
+                        old_ip = siem_network.private_ip
+                        siem_network.update_private_ip()
+                        if old_ip != siem_network.private_ip:
+                            siem_network.persist_server_status()
+                        ip_check_counter = 0
+                    
                     devices = siem_network.scan_network()
                     if devices:
                         siem_network.persist_network_scan(devices)
