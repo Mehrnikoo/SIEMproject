@@ -346,4 +346,45 @@ For more detailed information, see:
 
 ---
 
+## ⚡ Performance Optimization
+
+To prevent slowdowns from large amounts of log data, the system now includes:
+
+### Automatic Archiving
+- **Old logs** (>24 hours) are automatically moved to `archives/` folder
+- **Archiving runs every 6 hours** via cron job
+- Keeps only recent data in active files for faster loading
+
+### Limited Display
+- **Dashboard** shows only the 20 newest/most important events
+- **Logs page** shows only the 20 most recent security events
+- Reduces page load times and memory usage
+
+### Auto-Refresh
+- **Pages refresh automatically every 5 minutes**
+- Keeps data current without manual reloading
+
+### Setting up Archiving Cron Job
+
+Add this to your crontab to run archiving every 6 hours:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (adjust path if needed):
+0 */6 * * * /usr/bin/php /opt/lampp/htdocs/SIEMproject/archive.php
+```
+
+### Manual Archiving
+
+You can also run archiving manually:
+
+```bash
+cd /opt/lampp/htdocs/SIEMproject
+php archive.php
+```
+
+---
+
 **Enjoy your integrated SIEM system!** 🎉

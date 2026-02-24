@@ -19,8 +19,8 @@ class LogsController {
      * Load and process real/simulated events for the logs view
      */
     private function loadSecurityEvents() {
-        $realRaw = $this->eventModel->loadRealEvents();
-        $simRaw = $this->eventModel->loadSimulatedEvents();
+        $realRaw = $this->eventModel->loadRealEvents(20);
+        $simRaw = $this->eventModel->loadSimulatedEvents(20);
         
         $realEvents = $this->geoModel->processEvents($realRaw);
         $simEvents = $this->geoModel->processEvents($simRaw);
@@ -39,8 +39,8 @@ class LogsController {
         usort($simEvents, $sortFn);
         
         return [
-            'real' => array_slice($realEvents, 0, 150),
-            'simulated' => array_slice($simEvents, 0, 150)
+            'real' => array_slice($realEvents, 0, 20),
+            'simulated' => array_slice($simEvents, 0, 20)
         ];
     }
     

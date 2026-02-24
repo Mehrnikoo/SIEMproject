@@ -19,14 +19,14 @@ class DashboardController {
      * Render dashboard view
      */
     public function index() {
-        // Load raw event data
-        $real_events_raw = $this->eventModel->loadRealEvents();
-        $sim_events_raw = $this->eventModel->loadSimulatedEvents();
+        // Load limited event data for performance
+        $real_events_raw = $this->eventModel->loadRealEvents(20);
+        $sim_events_raw = $this->eventModel->loadSimulatedEvents(20);
         
         // Check for data errors
         $data_error = null;
         if (empty($real_events_raw) && empty($sim_events_raw)) {
-            $data_error = "Could not load log data. Run 'python3 log_processor.py' first.";
+            $data_error = "Could not load log data. Run 'python3 pythonSIEMscript.py' first.";
         }
         
         // Process and geocode events
@@ -37,7 +37,7 @@ class DashboardController {
         $real_event_data = $this->eventModel->sortEventsBySeverity($real_event_data);
         $sim_event_data = $this->eventModel->sortEventsBySeverity($sim_event_data);
         
-        // Calculate summary statistics
+        // Calculate summary statistics from loaded events
         $severity_counts = $this->eventModel->calculateSeverityCounts($real_event_data);
         $most_common_country = $this->eventModel->getMostCommonCountry($real_event_data);
         $total_all_events = count($real_event_data);

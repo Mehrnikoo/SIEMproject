@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="300"> <!-- Auto refresh every 5 minutes -->
     <title>Logs Viewer - SIEM Dashboard</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">

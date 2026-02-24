@@ -177,5 +177,73 @@ class LogsModel {
             'per_page' => $perPage
         ];
     }
+    
+    /**
+     * Archive old logs older than specified hours
+     */
+    public function archiveOldLogs($hoursOld = 24) {
+        $archiveDir = dirname(__DIR__, 2) . '/archives';
+        if (!is_dir($archiveDir)) {
+            mkdir($archiveDir, 0755, true);
+        }
+        
+        $cutoffTime = time() - ($hoursOld * 3600);
+        
+        // Archive raw_logs.json
+        $rawLogsFile = $this->config['data_files']['raw_logs'];
+        if (file_exists($rawLogsFile)) {
+            $content = @file_get_contents($rawLogsFile);
+            $logs = json_decode($content, true) ?: [];
+            
+            $current = [];
+            $archive = [];
+            
+            foreach ($logs as $log) {
+                $logTime = isset($log['timestamp']) ? strtotime($log['timestamp']) : 0;
+                if ($logTime < $cutoffTime) {
+                    $archive[] = $log;
+                } else {
+                    $current[] = $log;
+                }
+            }
+            
+            if (!empty($archive)) {
+                $archiveFile = $archiveDir . '/raw_logs_' . date('Y-m-d_H-i-s') . '.json';
+                file_put_contents($archiveFile, json_encode($archive, JSON_PRETTY_PRINT));
+            }
+            
+            file_put_contents($rawLogsFile, json_encode($current, JSON_PRETTY_PRINT));
+        }
+        
+        // Archive captured_logs
+        $capturedDir = dirname(__DIR__, 2) . '/captured_logs';
+        if (is_dir($capturedDir)) {
+            $files = glob($capturedDir . '/*.json');
+            foreach ($files as $file) {
+                $content = @file_get_contents($file);
+                $logs = json_decode($content, true) ?: [];
+                
+                $current = [];
+                $archive = [];
+                
+                foreach ($logs as $log) {
+                    $logTime = isset($log['timestamp']) ? strtotime($log['timestamp']) : 0;
+                    if ($logTime < $cutoffTime) {
+                        $archive[] = $log;
+                    } else {
+                        $current[] = $log;
+                    }
+                }
+                
+                if (!empty($archive)) {
+                    $basename = basename($file, '.json');
+                    $archiveFile = $archiveDir . '/' . $basename . '_' . date('Y-m-d_H-i-s') . '.json';
+                    file_put_contents($archiveFile, json_encode($archive, JSON_PRETTY_PRINT));
+                }
+                
+                file_put_contents($file, json_encode($current, JSON_PRETTY_PRINT));
+            }
+        }
+    }
 }
 

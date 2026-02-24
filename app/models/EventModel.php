@@ -12,7 +12,7 @@ class EventModel {
     /**
      * Load real events from log_data.json and Python-generated events
      */
-    public function loadRealEvents() {
+    public function loadRealEvents($limit = null) {
         $events = [];
         
         // Load from log_data.json
@@ -30,6 +30,11 @@ class EventModel {
             $timeB = isset($b['timestamp']) ? strtotime($b['timestamp']) : 0;
             return $timeB <=> $timeA;
         });
+        
+        // Limit if specified
+        if ($limit !== null && is_int($limit)) {
+            $events = array_slice($events, 0, $limit);
+        }
         
         return $events;
     }
@@ -93,10 +98,22 @@ class EventModel {
     /**
      * Load simulated events from sim_data.json
      */
-    public function loadSimulatedEvents() {
+    public function loadSimulatedEvents($limit = null) {
         $file = $this->config['data_files']['sim_data'];
         $data = @file_get_contents($file);
-        return json_decode($data, true) ?: [];
+        $events = json_decode($data, true) ?: [];
+        
+        // Sort by id (newest first, assuming higher id is newer)
+        usort($events, function($a, $b) {
+            return ($b['id'] ?? 0) <=> ($a['id'] ?? 0);
+        });
+        
+        // Limit if specified
+        if ($limit !== null && is_int($limit)) {
+            $events = array_slice($events, 0, $limit);
+        }
+        
+        return $events;
     }
     
     /**
@@ -150,6 +167,70 @@ class EventModel {
         });
         
         return $events;
+    }
+    
+    /**
+     * Archive old events older than specified hours
+     */
+    public function archiveOldEvents($hoursOld = 24) {
+        $archiveDir = dirname(__DIR__, 2) . '/archives';
+        if (!is_dir($archiveDir)) {
+            mkdir($archiveDir, 0755, true);
+        }
+        
+        $cutoffTime = time() - ($hoursOld * 3600);
+        
+        // Archive log_data.json
+        $logDataFile = $this->config['data_files']['log_data'];
+        if (file_exists($logDataFile)) {
+            $content = @file_get_contents($logDataFile);
+            $events = json_decode($content, true) ?: [];
+            
+            $current = [];
+            $archive = [];
+            
+            foreach ($events as $event) {
+                $eventTime = isset($event['timestamp']) ? strtotime($event['timestamp']) : 0;
+                if ($eventTime < $cutoffTime) {
+                    $archive[] = $event;
+                } else {
+                    $current[] = $event;
+                }
+            }
+            
+            if (!empty($archive)) {
+                $archiveFile = $archiveDir . '/log_data_' . date('Y-m-d_H-i-s') . '.json';
+                file_put_contents($archiveFile, json_encode($archive, JSON_PRETTY_PRINT));
+            }
+            
+            file_put_contents($logDataFile, json_encode($current, JSON_PRETTY_PRINT));
+        }
+        
+        // Archive security_events.json
+        $securityFile = dirname(__DIR__, 2) . '/captured_logs/security_events.json';
+        if (file_exists($securityFile)) {
+            $content = @file_get_contents($securityFile);
+            $events = json_decode($content, true) ?: [];
+            
+            $current = [];
+            $archive = [];
+            
+            foreach ($events as $event) {
+                $eventTime = isset($event['timestamp']) ? strtotime($event['timestamp']) : 0;
+                if ($eventTime < $cutoffTime) {
+                    $archive[] = $event;
+                } else {
+                    $current[] = $event;
+                }
+            }
+            
+            if (!empty($archive)) {
+                $archiveFile = $archiveDir . '/security_events_' . date('Y-m-d_H-i-s') . '.json';
+                file_put_contents($archiveFile, json_encode($archive, JSON_PRETTY_PRINT));
+            }
+            
+            file_put_contents($securityFile, json_encode($current, JSON_PRETTY_PRINT));
+        }
     }
 }
 
