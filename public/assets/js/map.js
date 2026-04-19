@@ -400,7 +400,16 @@ document.addEventListener('DOMContentLoaded', () => {
         detailsPanelContainer.style.display = 'flex';
         detailsDescription.textContent = event.description;
         detailsSourceIp.textContent = `Source: ${event.ip} | Target: ${event.target_device}`;
-        detailsRawLogs.textContent = (event.raw_logs || []).join('\n');
+        
+        // Format raw logs display
+        const rawLogsArray = event.raw_logs || [];
+        if (rawLogsArray.length > 0) {
+            detailsRawLogs.textContent = rawLogsArray.map((log, idx) => {
+                return `[${idx + 1}] ${log}`;
+            }).join('\n\n');
+        } else {
+            detailsRawLogs.textContent = 'No raw logs associated with this event.';
+        }
         
         // Reset trace button
         traceRouteButton.disabled = false;

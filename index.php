@@ -41,6 +41,9 @@ $tracerouteModel = new TracerouteModel();
 $logsModel = new LogsModel($config);
 $vlanModel = new VlanModel($config);
 
+// Inject LogsModel into EventModel for raw log lookups
+$eventModel->setLogsModel($logsModel);
+
 // Initialize controllers
 $dashboardController = new DashboardController($eventModel, $geoModel, $serverStatusModel, $config);
 $tracerouteController = new TracerouteController($tracerouteModel, $geoModel);

@@ -179,6 +179,75 @@ class LogsModel {
     }
     
     /**
+     * Get raw logs for a specific source IP (within a time window)
+     */
+    public function getLogsBySourceIP($sourceIp, $timeWindow = 300) {
+        $allLogs = $this->loadRawLogs();
+        
+        $matching = [];
+        foreach ($allLogs as $log) {
+            if (isset($log['source_ip']) && $log['source_ip'] === $sourceIp) {
+                $matching[] = $log;
+            }
+        }
+        
+        // Sort by timestamp, newest first
+        usort($matching, function($a, $b) {
+            $timeA = isset($a['timestamp']) ? strtotime($a['timestamp']) : 0;
+            $timeB = isset($b['timestamp']) ? strtotime($b['timestamp']) : 0;
+            return $timeB <=> $timeA;
+        });
+        
+        return $matching;
+    }
+    
+    /**
+     * Get raw logs that occurred around a specific event time
+     * Uses a generous time window (±1 hour by default) to account for processing delays
+     */
+    public function getLogsNearEvent($sourceIp, $eventTime, $timeWindowSeconds = 3600) {
+        $allLogs = $this->loadRawLogs();
+        
+        if (!$eventTime) {
+            // If no event time, just return all logs for this IP
+            return $this->getLogsBySourceIP($sourceIp);
+        }
+        
+        $eventTimestamp = strtotime($eventTime);
+        if ($eventTimestamp === false) {
+            // Fallback: return all logs for this IP
+            return $this->getLogsBySourceIP($sourceIp);
+        }
+        
+        $matching = [];
+        foreach ($allLogs as $log) {
+            if (isset($log['source_ip']) && $log['source_ip'] === $sourceIp) {
+                $logTime = isset($log['timestamp']) ? strtotime($log['timestamp']) : 0;
+                
+                // Check if log is within the time window
+                // Allow time before and after the event (processing delays)
+                if (abs($logTime - $eventTimestamp) <= $timeWindowSeconds) {
+                    $matching[] = $log;
+                }
+            }
+        }
+        
+        // If no logs within the time window, get ALL logs for this IP
+        if (empty($matching)) {
+            $matching = $this->getLogsBySourceIP($sourceIp);
+        }
+        
+        // Sort by timestamp, newest first
+        usort($matching, function($a, $b) {
+            $timeA = isset($a['timestamp']) ? strtotime($a['timestamp']) : 0;
+            $timeB = isset($b['timestamp']) ? strtotime($b['timestamp']) : 0;
+            return $timeB <=> $timeA;
+        });
+        
+        return $matching;
+    }
+    
+    /**
      * Archive old logs older than specified hours
      */
     public function archiveOldLogs($hoursOld = 24) {

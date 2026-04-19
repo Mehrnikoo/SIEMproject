@@ -2,7 +2,7 @@ nohup: ignoring input
 [Read_logs] Initializing continuous log streams...
 [Read_logs] Found Nginx at /var/log/nginx/access.log, tailing...
 [Read_logs] Found Apache at /var/log/apache2/access.log, tailing...
-[Network] Server status updated: {'private_ip': '192.168.119.107', 'last_update': '2026-04-19T13:26:44.932977'}
+[Network] Server status updated: {'private_ip': '192.168.119.107', 'last_update': '2026-04-19T14:02:26.542212'}
 Running Full SIEM Suite...
 OS: Linux
 Private IP: 192.168.119.107
@@ -16,17 +16,21 @@ Opening Network Traffic Window...
 Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
 ---------------------------------
 
---- Network Device Scan (ARP) ---
-Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
----------------------------------
+[High 🟠] sim-log-entry-2 
+sim-log-entry-2: SQL Injection from 192.168.1.50 targeting 192.168.119.107
+sim-log-entry-2: Action: BLOCKED
+
+[High 🟠] sim-log-entry-3 
+sim-log-entry-3: XSS Attack from 192.168.1.75 targeting 192.168.119.107
+sim-log-entry-3: Action: BLOCKED
 
 --- Network Device Scan (ARP) ---
 Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
 ---------------------------------
 
-[High 🟠] sim-log-entry-1 
-sim-log-entry-1: SQL Injection from 192.168.1.50 targeting 192.168.119.107
-sim-log-entry-1: Action: BLOCKED
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
 
 --- Network Device Scan (ARP) ---
 Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0

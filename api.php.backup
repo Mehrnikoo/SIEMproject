@@ -250,68 +250,6 @@ function handle_get_events($config, $pythonLogsDir) {
         $events = array_merge($events, $pythonEvents);
     }
     
-    // Load raw logs from captured_logs directory
-    $raw_logs_by_ip = [];
-    if (is_dir($pythonLogsDir)) {
-        $files = glob($pythonLogsDir . '/*.json');
-        foreach ($files as $file) {
-            // Skip security_events.json
-            if (basename($file) === 'security_events.json') {
-                continue;
-            }
-            
-            $content = @file_get_contents($file);
-            $data = json_decode($content, true);
-            
-            if (is_array($data)) {
-                $log_type = basename($file, '.json');
-                foreach ($data as $entry) {
-                    $ip = $entry['ip'] ?? $entry['source'] ?? null;
-                    if ($ip) {
-                        // Create a readable log line
-                        $log_line = '';
-                        if (isset($entry['path'])) {
-                            // Web server log
-                            $method = $entry['method'] ?? 'GET';
-                            $path = $entry['path'] ?? '/';
-                            $log_line = "$method $path";
-                        } elseif (isset($entry['message'])) {
-                            $log_line = $entry['message'];
-                        } elseif (isset($entry['MESSAGE'])) {
-                            $log_line = $entry['MESSAGE'];
-                        } else {
-                            $log_line = json_encode($entry);
-                        }
-                        
-                        if (!isset($raw_logs_by_ip[$ip])) {
-                            $raw_logs_by_ip[$ip] = [];
-                        }
-                        
-                        $raw_logs_by_ip[$ip][] = [
-                            'timestamp' => $entry['timestamp'] ?? $entry['date'] ?? date('Y-m-d H:i:s'),
-                            'type' => $log_type,
-                            'line' => $log_line
-                        ];
-                    }
-                }
-            }
-        }
-    }
-    
-    // Attach raw logs to events based on source_ip
-    foreach ($events as &$event) {
-        $event_source = $event['source_ip'] ?? $event['source'] ?? null;
-        if ($event_source && isset($raw_logs_by_ip[$event_source])) {
-            $raw_logs = $raw_logs_by_ip[$event_source];
-            // Convert to simple line format for display
-            $event['raw_logs'] = array_map(function($log) {
-                return $log['line'];
-            }, $raw_logs);
-        } else {
-            $event['raw_logs'] = [];
-        }
-    }
-    
     // Sort by timestamp descending
     usort($events, function($a, $b) {
         $timeA = strtotime($a['timestamp'] ?? '0000-00-00');

@@ -4,9 +4,18 @@
  */
 class EventModel {
     private $config;
+    private $logsModel = null; // Will be injected for raw log lookups
     
-    public function __construct($config) {
+    public function __construct($config, $logsModel = null) {
         $this->config = $config;
+        $this->logsModel = $logsModel;
+    }
+    
+    /**
+     * Set the LogsModel for raw log lookups
+     */
+    public function setLogsModel($logsModel) {
+        $this->logsModel = $logsModel;
     }
     
     /**
@@ -18,7 +27,31 @@ class EventModel {
         // Load from log_data.json
         $file = $this->config['data_files']['log_data'];
         $data = @file_get_contents($file);
-        $events = array_merge($events, json_decode($data, true) ?: []);
+        $logDataEvents = json_decode($data, true) ?: [];
+        
+        // Attach raw logs to log_data events
+        foreach ($logDataEvents as &$event) {
+            if (!isset($event['raw_logs'])) {
+                $event['raw_logs'] = [];
+                if ($this->logsModel !== null) {
+                    $sourceIp = $event['source_ip'] ?? $event['source'] ?? '';
+                    $eventTime = $event['timestamp'] ?? '';
+                    
+                    if ($sourceIp) {
+                        $relatedLogs = $this->logsModel->getLogsNearEvent($sourceIp, $eventTime, 300);
+                        $rawLines = [];
+                        foreach ($relatedLogs as $log) {
+                            if (isset($log['raw_line']) && !empty($log['raw_line'])) {
+                                $rawLines[] = $log['raw_line'];
+                            }
+                        }
+                        $event['raw_logs'] = $rawLines;
+                    }
+                }
+            }
+        }
+        
+        $events = array_merge($events, $logDataEvents);
         
         // Load from Python-generated security events
         $pythonEvents = $this->loadPythonSecurityEvents();
@@ -68,6 +101,33 @@ class EventModel {
             if (!isset($event['country'])) {
                 $event['country'] = 'Unknown';
             }
+            
+            // Add source_ip for consistency (Python events use 'source')
+            if (!isset($event['source_ip']) && isset($event['source'])) {
+                $event['source_ip'] = $event['source'];
+            }
+            
+            // Fetch associated raw logs if LogsModel is available
+            $event['raw_logs'] = [];
+            if ($this->logsModel !== null) {
+                $sourceIp = $event['source'] ?? $event['source_ip'] ?? '';
+                $eventTime = $event['timestamp'] ?? '';
+                
+                if ($sourceIp) {
+                    // Get logs from within 5 minutes of event
+                    $relatedLogs = $this->logsModel->getLogsNearEvent($sourceIp, $eventTime, 300);
+                    
+                    // Extract raw lines and format them
+                    $rawLines = [];
+                    foreach ($relatedLogs as $log) {
+                        if (isset($log['raw_line']) && !empty($log['raw_line'])) {
+                            $rawLines[] = $log['raw_line'];
+                        }
+                    }
+                    $event['raw_logs'] = $rawLines;
+                }
+            }
+            
             $event['from_python'] = true;
         }
         
@@ -102,6 +162,28 @@ class EventModel {
         $file = $this->config['data_files']['sim_data'];
         $data = @file_get_contents($file);
         $events = json_decode($data, true) ?: [];
+        
+        // Attach raw logs to simulated events
+        foreach ($events as &$event) {
+            if (!isset($event['raw_logs'])) {
+                $event['raw_logs'] = [];
+                if ($this->logsModel !== null) {
+                    $sourceIp = $event['source_ip'] ?? $event['source'] ?? '';
+                    $eventTime = $event['timestamp'] ?? '';
+                    
+                    if ($sourceIp) {
+                        $relatedLogs = $this->logsModel->getLogsNearEvent($sourceIp, $eventTime, 300);
+                        $rawLines = [];
+                        foreach ($relatedLogs as $log) {
+                            if (isset($log['raw_line']) && !empty($log['raw_line'])) {
+                                $rawLines[] = $log['raw_line'];
+                            }
+                        }
+                        $event['raw_logs'] = $rawLines;
+                    }
+                }
+            }
+        }
         
         // Sort by id (newest first, assuming higher id is newer)
         usort($events, function($a, $b) {

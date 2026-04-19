@@ -334,5 +334,59 @@
         "private_ip": "192.168.119.107",
         "bytes_sent": 39516148,
         "bytes_recv": 604565639
+    },
+    {
+        "timestamp": "2026-04-19 14:02:26",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 64924822,
+        "bytes_recv": 618733555
+    },
+    {
+        "timestamp": "2026-04-19 14:02:41",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 66811822,
+        "bytes_recv": 618937697
+    },
+    {
+        "timestamp": "2026-04-19 14:02:56",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 68715005,
+        "bytes_recv": 619072900
+    },
+    {
+        "timestamp": "2026-04-19 14:03:11",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 69003163,
+        "bytes_recv": 619215973
+    },
+    {
+        "timestamp": "2026-04-19 14:03:26",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 69051661,
+        "bytes_recv": 619267281
+    },
+    {
+        "timestamp": "2026-04-19 14:03:41",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 69094910,
+        "bytes_recv": 619310514
+    },
+    {
+        "timestamp": "2026-04-19 14:03:56",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 70383858,
+        "bytes_recv": 619449576
+    },
+    {
+        "timestamp": "2026-04-19 14:04:11",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 71878255,
+        "bytes_recv": 619608532
+    },
+    {
+        "timestamp": "2026-04-19 14:04:27",
+        "private_ip": "192.168.119.107",
+        "bytes_sent": 72788042,
+        "bytes_recv": 619765524
     }
 ]

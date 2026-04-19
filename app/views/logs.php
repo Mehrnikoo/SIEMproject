@@ -265,6 +265,59 @@
         .log-type-System { background-color: #374151; color: #d1d5db; }
         .log-type-Other { background-color: #475569; color: #cbd5e1; }
         
+        .event-row {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .event-row:hover {
+            background-color: #1e293b;
+        }
+        
+        .event-row-expanded {
+            background-color: #1e293b;
+        }
+        
+        .raw-logs-container {
+            background-color: #0f172a;
+            border-left: 4px solid #38bdf8;
+            padding: 12px;
+            margin-top: 8px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .raw-logs-container h4 {
+            color: #38bdf8;
+            margin: 0 0 8px 0;
+            font-size: 0.9rem;
+        }
+        
+        .raw-log-line {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            word-break: break-all;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        .raw-log-line:last-child {
+            margin-bottom: 0;
+        }
+        
+        .raw-logs-empty {
+            color: #64748b;
+            font-size: 0.85rem;
+            font-style: italic;
+        }
+        
         .log-raw {
             font-family: 'Courier New', monospace;
             font-size: 0.8rem;
@@ -435,7 +488,7 @@ if (!function_exists('logs_view_format_timestamp')) {
                             </thead>
                             <tbody>
                                 <?php foreach ($real_events as $event): ?>
-                                    <tr>
+                                    <tr class="event-row" onclick="toggleRawLogs(this, 'event-<?php echo isset($event['id']) ? md5($event['id']) : md5(json_encode($event)); ?>')">
                                         <td>
                                             <?php $sev = $event['severity'] ?? 'Low'; ?>
                                             <span class="severity-pill" style="background-color: <?php echo View::escape($severityColors[$sev] ?? '#64748b'); ?>;">
@@ -449,6 +502,25 @@ if (!function_exists('logs_view_format_timestamp')) {
                                         </td>
                                         <td><?php echo View::escape($event['target_device'] ?? 'Asset'); ?></td>
                                         <td><?php echo View::escape($event['description'] ?? ''); ?></td>
+                                    </tr>
+                                    <tr id="event-<?php echo isset($event['id']) ? md5($event['id']) : md5(json_encode($event)); ?>" style="display:none;">
+                                        <td colspan="5">
+                                            <?php 
+                                                $rawLogs = $event['raw_logs'] ?? [];
+                                                if (!empty($rawLogs)):
+                                            ?>
+                                                <div class="raw-logs-container">
+                                                    <h4>📋 Associated Raw Logs (<?php echo count($rawLogs); ?>)</h4>
+                                                    <?php foreach ($rawLogs as $log): ?>
+                                                        <div class="raw-log-line"><?php echo View::escape($log); ?></div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="raw-logs-container">
+                                                    <div class="raw-logs-empty">No associated raw logs found for this event.</div>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -475,7 +547,7 @@ if (!function_exists('logs_view_format_timestamp')) {
                             </thead>
                             <tbody>
                                 <?php foreach ($simulated_events as $event): ?>
-                                    <tr>
+                                    <tr class="event-row" onclick="toggleRawLogs(this, 'event-<?php echo isset($event['id']) ? md5($event['id']) : md5(json_encode($event)); ?>')">
                                         <td>
                                             <?php $sev = $event['severity'] ?? 'Low'; ?>
                                             <span class="severity-pill" style="background-color: <?php echo View::escape($severityColors[$sev] ?? '#64748b'); ?>;">
@@ -489,6 +561,25 @@ if (!function_exists('logs_view_format_timestamp')) {
                                         </td>
                                         <td><?php echo View::escape($event['target_device'] ?? 'Asset'); ?></td>
                                         <td><?php echo View::escape($event['description'] ?? ''); ?></td>
+                                    </tr>
+                                    <tr id="event-<?php echo isset($event['id']) ? md5($event['id']) : md5(json_encode($event)); ?>" style="display:none;">
+                                        <td colspan="5">
+                                            <?php 
+                                                $rawLogs = $event['raw_logs'] ?? [];
+                                                if (!empty($rawLogs)):
+                                            ?>
+                                                <div class="raw-logs-container">
+                                                    <h4>📋 Associated Raw Logs (<?php echo count($rawLogs); ?>)</h4>
+                                                    <?php foreach ($rawLogs as $log): ?>
+                                                        <div class="raw-log-line"><?php echo View::escape($log); ?></div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="raw-logs-container">
+                                                    <div class="raw-logs-empty">No associated raw logs found for this event.</div>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -578,6 +669,23 @@ if (!function_exists('logs_view_format_timestamp')) {
                 applyFilters();
             }
         });
+        
+        // Toggle raw logs display for events
+        function toggleRawLogs(rowElement, logRowId) {
+            const logRow = document.getElementById(logRowId);
+            const isVisible = logRow.style.display !== 'none';
+            
+            // Close all other expanded rows
+            document.querySelectorAll('[id^="event-"]').forEach(el => {
+                if (el.id !== logRowId) {
+                    el.style.display = 'none';
+                }
+            });
+            
+            // Toggle this row
+            logRow.style.display = isVisible ? 'none' : 'table-row';
+            rowElement.classList.toggle('event-row-expanded');
+        }
     </script>
 </body>
 </html>
