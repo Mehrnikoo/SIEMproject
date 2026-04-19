@@ -256,19 +256,37 @@ class Read_logs(Logs):
 
 
     def _parse_nginx(self, line):
-        # Nginx Combined Format
-        regex = r'(?P<ip>[\d\.]+) - - \[(?P<date>[^\]]+)\] "(?P<method>\w+) (?P<path>[^\s]+) [^"]+" (?P<status>\d+)'
+        # Nginx Combined Format - Capture full request to handle payloads with spaces
+        regex = r'(?P<ip>[\d\.]+) - - \[(?P<date>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+)'
         match = re.search(regex, line)
         if match:
-            return match.groupdict()
+            data = match.groupdict()
+            # Parse the request into method, path, and protocol
+            request_parts = data['request'].split(' ')
+            if len(request_parts) >= 2:
+                data['method'] = request_parts[0]
+                data['path'] = ' '.join(request_parts[1:-1]) if len(request_parts) > 2 else request_parts[1]
+            else:
+                data['method'] = request_parts[0] if request_parts else 'UNKNOWN'
+                data['path'] = request_parts[1] if len(request_parts) > 1 else ''
+            return data
         return None
 
     def _parse_apache(self, line):
-        # Apache Common/Combined is very similar to Nginx
-        regex = r'(?P<ip>[\d\.]+) - - \[(?P<date>[^\]]+)\] "(?P<method>\w+) (?P<path>[^\s]+) [^"]+" (?P<status>\d+)'
+        # Apache Common/Combined - Capture full request to handle payloads with spaces
+        regex = r'(?P<ip>[\d\.]+) - - \[(?P<date>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+)'
         match = re.search(regex, line)
         if match:
-            return match.groupdict()
+            data = match.groupdict()
+            # Parse the request into method, path, and protocol
+            request_parts = data['request'].split(' ')
+            if len(request_parts) >= 2:
+                data['method'] = request_parts[0]
+                data['path'] = ' '.join(request_parts[1:-1]) if len(request_parts) > 2 else request_parts[1]
+            else:
+                data['method'] = request_parts[0] if request_parts else 'UNKNOWN'
+                data['path'] = request_parts[1] if len(request_parts) > 1 else ''
+            return data
         return None
 
     def store_to_files(self, parsed_data):

@@ -1,1 +1,12 @@
-[]
+[
+    {
+        "id": "sim-log-entry-1",
+        "timestamp": "2026-04-19 13:27:24",
+        "severity_sticker": "High \ud83d\udfe0",
+        "attack_type": "SQL Injection",
+        "source": "192.168.1.50",
+        "target": "192.168.119.107",
+        "formatted_log": "sim-log-entry-1: SQL Injection from 192.168.1.50 targeting 192.168.119.107\nsim-log-entry-1: Action: BLOCKED",
+        "details": "Payload found: /login.php?id=1 UNION SELECT NULL,username,password FROM users"
+    }
+]

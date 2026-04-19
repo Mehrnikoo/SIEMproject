@@ -1,0 +1,53 @@
+nohup: ignoring input
+[Read_logs] Initializing continuous log streams...
+[Read_logs] Found Nginx at /var/log/nginx/access.log, tailing...
+[Read_logs] Found Apache at /var/log/apache2/access.log, tailing...
+[Network] Server status updated: {'private_ip': '192.168.119.107', 'last_update': '2026-04-19T13:26:44.932977'}
+Running Full SIEM Suite...
+OS: Linux
+Private IP: 192.168.119.107
+Mode: [SERVER] Listening for logs on port 5555...
+[Containment] Central Log Server Listening on Port 5555...
+Modules Active: Tailing Logs (System, Nginx, Apache), Analysis, Sorting, Containment, Network Monitor
+SIEM Log Monitor running in background.
+Opening Network Traffic Window...
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+[High 🟠] sim-log-entry-1 
+sim-log-entry-1: SQL Injection from 192.168.1.50 targeting 192.168.119.107
+sim-log-entry-1: Action: BLOCKED
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
+
+--- Network Device Scan (ARP) ---
+Device found: 192.168.119.187 | Raw: ? (192.168.119.187) at fe:a8:3c:28:2e:7b [ether] on wlan0
+---------------------------------
