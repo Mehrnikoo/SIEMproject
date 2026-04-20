@@ -40,6 +40,7 @@ $serverStatusModel = new ServerStatusModel($config);
 $tracerouteModel = new TracerouteModel();
 $logsModel = new LogsModel($config);
 $vlanModel = new VlanModel($config);
+$networkDiscovery = new NetworkDiscoveryModel($config);
 
 // Inject LogsModel into EventModel for raw log lookups
 $eventModel->setLogsModel($logsModel);
@@ -50,7 +51,7 @@ $tracerouteController = new TracerouteController($tracerouteModel, $geoModel);
 $whoisController = new WhoisController($geoModel);
 $eventsController = new EventsController($eventModel);
 $logsController = new LogsController($logsModel, $eventModel, $geoModel, $config);
-$vlanController = new VlanController($vlanModel, $eventModel, $geoModel, $logsModel, $serverStatusModel);
+$vlanController = new VlanController($vlanModel, $eventModel, $geoModel, $logsModel, $serverStatusModel, $networkDiscovery);
 $syncController = new SyncController($config);
 
 // Routing - SECURITY: Sanitize and validate inputs

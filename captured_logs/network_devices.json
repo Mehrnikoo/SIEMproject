@@ -1,0 +1,23 @@
+{
+    "devices": [
+        {
+            "ip": "192.168.119.187",
+            "hostname": "192.168.119.187",
+            "mac": null,
+            "status": "online",
+            "last_seen": "2026-04-20T10:26:27+00:00",
+            "services": []
+        },
+        {
+            "ip": "192.168.119.107",
+            "hostname": "192.168.119.107",
+            "mac": null,
+            "status": "online",
+            "last_seen": "2026-04-20T10:26:27+00:00",
+            "services": []
+        }
+    ],
+    "network": "192.168.119.0\/24",
+    "timestamp": "2026-04-20T10:26:27+00:00",
+    "scan_type": "ping_scan"
+}

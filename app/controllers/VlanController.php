@@ -8,19 +8,106 @@ class VlanController {
     private $geoModel;
     private $logsModel;
     private $serverStatusModel;
+    private $networkDiscovery;
     
-    public function __construct($vlanModel, $eventModel, $geoModel, $logsModel, $serverStatusModel) {
+    public function __construct($vlanModel, $eventModel, $geoModel, $logsModel, $serverStatusModel, $networkDiscovery = null) {
         $this->vlanModel = $vlanModel;
         $this->eventModel = $eventModel;
         $this->geoModel = $geoModel;
         $this->logsModel = $logsModel;
         $this->serverStatusModel = $serverStatusModel;
+        $this->networkDiscovery = $networkDiscovery;
     }
     
     /**
      * Collect data for VLAN view/state
      */
     private function buildDataset() {
+        // Use real network discovery if available
+        if ($this->networkDiscovery) {
+            $discoveredVlan = $this->networkDiscovery->getDiscoveredVlan();
+            if ($discoveredVlan) {
+                $vlans = [$discoveredVlan];
+                
+                // Build summary stats
+                $summary = [
+                    'total_vlans' => 1,
+                    'total_endpoints' => count($discoveredVlan['endpoints'] ?? []),
+                    'total_threats' => 0,
+                ];
+                
+                // Load security events to correlate threats with discovered devices
+                // Count ONLY REAL events that are threats (Critical or High severity)
+                $realRaw = $this->eventModel->loadRealEvents();
+                $realEvents = $this->geoModel->processEvents($realRaw);
+                
+                // Count severity levels for alert bars
+                $criticalCount = 0;
+                $highCount = 0;
+                $mediumCount = 0;
+                $lowCount = 0;
+                foreach ($realEvents as $event) {
+                    $severity = $event['severity'] ?? 'Low';
+                    if ($severity === 'Critical') $criticalCount++;
+                    elseif ($severity === 'High') $highCount++;
+                    elseif ($severity === 'Medium') $mediumCount++;
+                    else $lowCount++;
+                }
+                
+                // Threat count = all Critical and High severity events (real threats only)
+                $totalThreatsCount = $criticalCount + $highCount;
+                
+                // Add alert_bars to VLAN for frontend display
+                $vlans[0]['threat_count'] = $totalThreatsCount;
+                $vlans[0]['alert_bars'] = [
+                    ['type' => 'Critical Attacks', 'count' => $criticalCount, 'color' => '#dc2626'],
+                    ['type' => 'Suspicious Activity', 'count' => $highCount, 'color' => '#f59e0b'],
+                    ['type' => 'Informationals', 'count' => ($mediumCount + $lowCount), 'color' => '#22c55e'],
+                ];
+                
+                // Update summary with real threat count
+                $summary['total_threats'] = $totalThreatsCount;
+                
+                // Load network stats from Python script if available
+                $network = [];
+                $logsDir = rtrim(__DIR__, '/') . '/../../captured_logs';
+                
+                try {
+                    $scanFile = $logsDir . '/network_scan.json';
+                    $statFile = $logsDir . '/network_stats.json';
+                    $actionsFile = $logsDir . '/containment_actions.json';
+                    $executedFile = $logsDir . '/containment_executed.json';
+
+                    if (file_exists($scanFile)) {
+                        $network['scan'] = json_decode(file_get_contents($scanFile), true);
+                    }
+                    if (file_exists($statFile)) {
+                        $network['stats'] = json_decode(file_get_contents($statFile), true);
+                    }
+                    $histFile = $logsDir . '/network_stats_history.json';
+                    if (file_exists($histFile)) {
+                        $network['stats_history'] = json_decode(file_get_contents($histFile), true);
+                    }
+                    if (file_exists($actionsFile)) {
+                        $network['pending_actions'] = json_decode(file_get_contents($actionsFile), true);
+                    }
+                    if (file_exists($executedFile)) {
+                        $network['executed_actions'] = json_decode(file_get_contents($executedFile), true);
+                    }
+                } catch (Exception $e) {
+                    $network = [];
+                }
+                
+                return [
+                    'vlans' => $vlans,
+                    'summary' => $summary,
+                    'server' => $this->serverStatusModel->getServerStatus(),
+                    'network' => $network
+                ];
+            }
+        }
+        
+        // Fallback to old VLAN inference method if discovery not available
         $realRaw = $this->eventModel->loadRealEvents();
         $simRaw = $this->eventModel->loadSimulatedEvents();
         
@@ -35,17 +122,13 @@ class VlanController {
 
         // Attempt to load network scan/stats produced by the Python agent
         $network = [];
-        // Use captured_logs directory inside project as the authoritative location
-        $logsDir = realpath(__DIR__ . '/../../captured_logs');
-        if (!$logsDir) {
-            $logsDir = __DIR__ . '/../../captured_logs';
-        }
+        $logsDir = rtrim(__DIR__, '/') . '/../../captured_logs';
 
         try {
-            $scanFile = rtrim($logsDir, '/') . '/network_scan.json';
-            $statFile = rtrim($logsDir, '/') . '/network_stats.json';
-            $actionsFile = rtrim($logsDir, '/') . '/containment_actions.json';
-            $executedFile = rtrim($logsDir, '/') . '/containment_executed.json';
+            $scanFile = $logsDir . '/network_scan.json';
+            $statFile = $logsDir . '/network_stats.json';
+            $actionsFile = $logsDir . '/containment_actions.json';
+            $executedFile = $logsDir . '/containment_executed.json';
 
             if (file_exists($scanFile)) {
                 $network['scan'] = json_decode(file_get_contents($scanFile), true);
@@ -53,7 +136,7 @@ class VlanController {
             if (file_exists($statFile)) {
                 $network['stats'] = json_decode(file_get_contents($statFile), true);
             }
-            $histFile = rtrim($logsDir, '/') . '/network_stats_history.json';
+            $histFile = $logsDir . '/network_stats_history.json';
             if (file_exists($histFile)) {
                 $network['stats_history'] = json_decode(file_get_contents($histFile), true);
             }

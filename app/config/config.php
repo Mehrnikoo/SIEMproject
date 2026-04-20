@@ -17,6 +17,7 @@ return [
         'server_status' => __DIR__ . '/../../server_status.json',
         'raw_logs' => __DIR__ . '/../../raw_logs.json',
     ],
+    'base_path' => __DIR__ . '/../..',
     'python_logs_dir' => __DIR__ . '/../../captured_logs',
     'geo_api' => 'http://ip-api.com/json/',
     'public_ip_service' => 'https://api.ipify.org',
