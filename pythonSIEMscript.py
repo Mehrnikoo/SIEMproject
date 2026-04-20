@@ -2,6 +2,7 @@ import json
 import socket
 import re
 import os
+import ipaddress
 from datetime import datetime
 import random
 import argparse
@@ -651,15 +652,84 @@ class Network(Logs):
         return self._private_ip
 
     def get_private_ip(self):
-        """Fetch the current private IP address."""
+        """Fetch the most likely LAN private IP (avoid tunnel/VPN interfaces)."""
+        candidates = []
+        avoided_prefixes = ('utun', 'tun', 'tap', 'wg', 'tailscale', 'ppp', 'docker', 'veth', 'br-', 'lo')
+        preferred_prefixes = ('wlan', 'wl', 'eth', 'en', 'eno', 'enp', 'wlp')
+
+        def add_candidate(ip, iface=''):
+            try:
+                ip_obj = ipaddress.ip_address(ip)
+            except Exception:
+                return
+            if ip_obj.version != 4:
+                return
+            if not ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
+                return
+            iface_l = (iface or '').lower()
+            score = 0
+            if iface_l.startswith(preferred_prefixes):
+                score += 3
+            if any(iface_l.startswith(prefix) for prefix in avoided_prefixes):
+                score -= 5
+            # Prefer common LAN blocks over carrier-grade NAT/tunnel ranges.
+            if ip.startswith('192.168.') or ip.startswith('10.'):
+                score += 2
+            if ip.startswith('100.64.') or ip.startswith('100.'):
+                score -= 2
+            candidates.append((score, ip))
+
+        # Linux: reliable interface + IPv4 list
+        if self.os_type == 'Linux':
+            try:
+                output = subprocess.check_output(['ip', '-4', '-o', 'addr', 'show', 'up'], text=True)
+                for line in output.splitlines():
+                    # Example: "2: wlan0    inet 192.168.1.10/24 ..."
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        iface = parts[1]
+                        inet_cidr = parts[3]
+                        ip = inet_cidr.split('/')[0]
+                        add_candidate(ip, iface)
+            except Exception:
+                pass
+        # macOS/BSD fallback
+        elif self.os_type == 'macOS':
+            try:
+                output = subprocess.check_output(['ifconfig'], text=True)
+                current_iface = ''
+                for line in output.splitlines():
+                    if line and not line.startswith('\t') and ':' in line:
+                        current_iface = line.split(':', 1)[0].strip()
+                        continue
+                    m = re.search(r'inet (\d+\.\d+\.\d+\.\d+)', line)
+                    if m:
+                        add_candidate(m.group(1), current_iface)
+            except Exception:
+                pass
+
+        # Generic fallback
+        try:
+            host_ips = socket.gethostbyname_ex(socket.gethostname())[2]
+            for ip in host_ips:
+                add_candidate(ip)
+        except Exception:
+            pass
+
+        # Last resort from outbound route (can pick tunnel, low score mitigates this if others exist).
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
+            outbound_ip = s.getsockname()[0]
             s.close()
-            return ip
+            add_candidate(outbound_ip, 'route')
         except Exception:
-            return "127.0.0.1"
+            pass
+
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
+        return "127.0.0.1"
 
     def update_private_ip(self):
         """Update the stored private IP address with the current value."""
@@ -940,9 +1010,11 @@ if __name__ == "__main__":
                             siem_network.persist_server_status()
                         ip_check_counter = 0
                     
+                    # Refresh host IP every cycle so dashboard files reflect network changes quickly.
+                    siem_network.force_refresh_private_ip()
                     devices = siem_network.scan_network()
-                    if devices:
-                        siem_network.persist_network_scan(devices)
+                    # Always persist scan output (even empty) to avoid stale VLAN data.
+                    siem_network.persist_network_scan(devices)
                     sent, recv = siem_network.get_traffic_stats()
                     siem_network.persist_traffic_stats(sent, recv)
                     # Do not enable destructive containment by default. Set ENABLE_CONTAINMENT env var to '1' to enable.

@@ -70,7 +70,30 @@ pip3 --version
 
 ## Quick Start (5 Minutes)
 
-For the impatient - get it running in 5 minutes:
+Choose your installation method:
+
+### Quick Start with Docker (Easiest)
+
+```bash
+# 1. In the project directory (where Dockerfile is)
+docker build -t siem .
+
+# 2. Run the container
+docker run -p 80:80 -p 443:443 -p 3306:3306 siem
+
+# 3. Open website
+# http://localhost/SIEMproject/
+```
+
+**Done!** The system is running inside Docker with:
+- Apache, PHP, MySQL pre-configured
+- Python SIEM script running
+- All dependencies installed
+- Ready to detect threats
+
+---
+
+### Quick Start with Native LAMPP (Linux Only)
 
 ### Step 1: Start Apache/LAMPP
 ```bash

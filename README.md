@@ -66,10 +66,23 @@ Website shows  ←  Displays on map   ←  Stores events  ←
 
 ## System Requirements
 
+### Option 1: Native Installation (Linux)
 - Linux (Ubuntu, CentOS, etc.)
 - LAMPP installed at `/opt/lampp/`
 - Python 3.6+
 - 2GB RAM minimum
+
+### Option 2: Docker (Any OS - Windows, Mac, Linux)
+```bash
+# Install Docker first, then:
+docker build -t siem .
+docker run -p 80:80 -p 443:443 siem
+```
+✅ Works identically on Windows, Mac, Linux  
+✅ No OS-specific setup needed  
+✅ All dependencies pre-installed  
+
+**See [SETUP_GUIDE.md](SETUP_GUIDE.md) for complete Docker or native installation steps**
 
 ---
 

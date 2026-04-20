@@ -6,6 +6,17 @@
 
 This is your one-stop guide for everything - installation, configuration, usage, and troubleshooting.
 
+### Choose Your Installation Method
+
+**🐳 Docker (Recommended - Windows/Mac/Linux)**
+- Works on any operating system
+- One command to install everything
+- See "Quick Start with Docker" in [SETUP_GUIDE.md](SETUP_GUIDE.md)
+
+**🐧 Native LAMPP (Linux Only)**
+- Direct installation on Linux system
+- See "Complete Setup" in [SETUP_GUIDE.md](SETUP_GUIDE.md)
+
 ---
 
 ## Documentation Files
