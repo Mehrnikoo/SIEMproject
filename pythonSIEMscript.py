@@ -334,6 +334,47 @@ class Sort_event(Logs):
                     self.event_counter = len(data) + 1
             except: pass
 
+    def _event_fingerprint(self, event):
+        """Build a stable fingerprint used to suppress duplicate suspicious events."""
+        attack_type = str(event.get("attack_type", "")).strip().lower()
+        source = str(event.get("source", "")).strip().lower()
+        target = str(event.get("target", "")).strip().lower()
+        details = str(event.get("details", "")).strip().lower()
+        return f"{attack_type}|{source}|{target}|{details}"
+
+    def _is_duplicate_recent_event(self, new_event, window_seconds=60):
+        """
+        Return True if an equivalent event already exists in recent history.
+        This helps prevent repeated suspicious events from being persisted/displayed.
+        """
+        try:
+            if not os.path.exists(self.output_file):
+                return False
+            with open(self.output_file, 'r') as f:
+                existing = json.load(f)
+            if not isinstance(existing, list) or not existing:
+                return False
+
+            new_fp = self._event_fingerprint(new_event)
+            new_ts = datetime.strptime(new_event.get("timestamp", ""), "%Y-%m-%d %H:%M:%S")
+            for event in reversed(existing[-200:]):  # check recent tail only
+                if not isinstance(event, dict):
+                    continue
+                if self._event_fingerprint(event) != new_fp:
+                    continue
+                ts_str = event.get("timestamp")
+                if not ts_str:
+                    return True
+                try:
+                    old_ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                    if abs((new_ts - old_ts).total_seconds()) <= window_seconds:
+                        return True
+                except Exception:
+                    return True
+        except Exception:
+            return False
+        return False
+
     def classify_severity(self, attack_type):
         severity_map = {
             "DDoS Attack": "Critical 🔴",
@@ -397,6 +438,9 @@ class Sort_event(Logs):
             "formatted_log": formatted_message,
             "details": details
         }
+
+        if self._is_duplicate_recent_event(log_object):
+            return log_object
 
         self.save_to_json(log_object)
         self.send_to_logstash_alert(log_object)

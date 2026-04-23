@@ -28,6 +28,7 @@ class LogsModel {
         // Load from Python-generated captured_logs
         $pythonLogs = $this->loadPythonCapturedLogs();
         $logs = array_merge($logs, $pythonLogs);
+        $logs = $this->deduplicateLogs($logs);
         
         // Sort by timestamp (newest first)
         usort($logs, function($a, $b) {
@@ -243,8 +244,46 @@ class LogsModel {
             $timeB = isset($b['timestamp']) ? strtotime($b['timestamp']) : 0;
             return $timeB <=> $timeA;
         });
-        
-        return $matching;
+
+        return $this->deduplicateLogs($matching);
+    }
+
+    /**
+     * Remove duplicate raw logs to keep table/rendering clean.
+     */
+    private function deduplicateLogs($logs) {
+        if (!is_array($logs) || empty($logs)) {
+            return [];
+        }
+
+        $seen = [];
+        $deduped = [];
+        foreach ($logs as $log) {
+            if (!is_array($log)) {
+                continue;
+            }
+            $id = trim((string)($log['id'] ?? ''));
+            $idLower = strtolower($id);
+            if ($id !== '' && $id !== '0' && $idLower !== 'unknown' && $idLower !== 'n/a') {
+                $key = 'id:' . $idLower;
+            } else {
+                $key = 'fp:' . md5(strtolower(implode('|', [
+                    (string)($log['timestamp'] ?? ''),
+                    (string)($log['log_type'] ?? ''),
+                    (string)($log['log_file'] ?? ''),
+                    (string)($log['source_ip'] ?? ''),
+                    (string)($log['destination_ip'] ?? ''),
+                    (string)($log['raw_line'] ?? ''),
+                ])));
+            }
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $log;
+        }
+        return $deduped;
     }
     
     /**

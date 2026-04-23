@@ -394,8 +394,41 @@ $defaultSeverityColors = [
 $severityColors = array_merge($defaultSeverityColors, $severity_map ?? []);
 $real_events = $real_events ?? [];
 $simulated_events = $simulated_events ?? [];
-$real_event_count = $real_event_count ?? count($real_events);
-$sim_event_count = $sim_event_count ?? count($simulated_events);
+
+// Deduplication function: Remove duplicate suspicious events
+function deduplicateEventsList($events) {
+    if (empty($events) || !is_array($events)) {
+        return [];
+    }
+    
+    $seen = [];
+    $deduplicated = [];
+    
+    foreach ($events as $event) {
+        // Create a unique key based on: timestamp + ip + description + target
+        // This ensures we don't show the same attack from the same source at the same time twice
+        $timestamp = $event['timestamp'] ?? $event['time'] ?? '';
+        $ip = $event['ip'] ?? $event['source_ip'] ?? '';
+        $description = $event['description'] ?? '';
+        $target = $event['target_device'] ?? '';
+        
+        $uniqueKey = "{$timestamp}||{$ip}||{$description}||{$target}";
+        
+        if (!isset($seen[$uniqueKey])) {
+            $seen[$uniqueKey] = true;
+            $deduplicated[] = $event;
+        }
+    }
+    
+    return $deduplicated;
+}
+
+// Deduplicate both real and simulated events
+$real_events = deduplicateEventsList($real_events);
+$simulated_events = deduplicateEventsList($simulated_events);
+
+$real_event_count = count($real_events);
+$sim_event_count = count($simulated_events);
 
 if (!function_exists('logs_view_format_timestamp')) {
     function logs_view_format_timestamp($timestamp) {

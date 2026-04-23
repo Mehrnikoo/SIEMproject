@@ -226,16 +226,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderEvents(list) {
-        currentEventsToDraw = list || [];
+        // Deduplicate events before rendering
+        const deduplicatedList = deduplicateEvents(list || []);
+        currentEventsToDraw = deduplicatedList;
+        
         if (!map || !eventLayer) {
-            if (list) populateEventList(sortEvents(list, currentSortMode));
+            if (deduplicatedList) populateEventList(sortEvents(deduplicatedList, currentSortMode));
             return;
         }
         clearLeafletMarkers();
-        if (!list) return;
+        if (!deduplicatedList) return;
         
         // Draw markers for current list
-        list.forEach(event => {
+        deduplicatedList.forEach(event => {
             if (event.type === 'EXTERNAL' && event.lat !== null && event.lon !== null && (event.lat !== 0 || event.lon !== 0)) {
                 const attackCoords = [event.lat, event.lon];
                 const severityColor = severityMap[event.severity] || '#fff';
@@ -278,8 +281,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return typeof event.id === 'number' ? event.id : 0;
     }
 
+    // --- DEDUPLICATION: Remove duplicate suspicious events ---
+    function deduplicateEvents(list) {
+        if (!list || list.length === 0) return list;
+        
+        const seen = new Set();
+        const deduplicated = [];
+        
+        list.forEach(event => {
+            // Create a unique key based on: timestamp + ip + description + target
+            // This ensures we don't show the same attack from the same source at the same time twice
+            const timestamp = event.timestamp || event.time || '';
+            const ip = event.ip || event.source_ip || '';
+            const description = event.description || '';
+            const target = event.target_device || '';
+            
+            const uniqueKey = `${timestamp}||${ip}||${description}||${target}`;
+            
+            if (!seen.has(uniqueKey)) {
+                seen.add(uniqueKey);
+                deduplicated.push(event);
+            }
+        });
+        
+        return deduplicated;
+    }
+
     function sortEvents(list, mode) {
-        const copy = (list || []).slice();
+        // First deduplicate, then sort
+        const deduped = deduplicateEvents(list || []);
+        const copy = deduped.slice();
+        
         if (mode === 'severity_desc') {
             copy.sort((a, b) => (severityOrderDesc[b.severity]||0) - (severityOrderDesc[a.severity]||0) || getEventTimestamp(b) - getEventTimestamp(a));
         } else if (mode === 'severity_asc') {

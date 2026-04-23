@@ -29,8 +29,36 @@ class EventModel {
         $data = @file_get_contents($file);
         $logDataEvents = json_decode($data, true) ?: [];
         
-        // Attach raw logs to log_data events
+        // Normalize real events from log_data.json to ensure description field exists
         foreach ($logDataEvents as &$event) {
+            // Add description field if it doesn't exist (for UI display)
+            if (empty($event['description'])) {
+                if (!empty($event['attack_type'])) {
+                    $event['description'] = $event['attack_type'];
+                } elseif (!empty($event['details'])) {
+                    $event['description'] = $event['details'];
+                } else {
+                    $event['description'] = 'Suspicious Activity';
+                }
+            }
+            
+            // Ensure all required fields exist
+            if (!isset($event['type'])) {
+                $event['type'] = $this->isInternalIP($event['source'] ?? '') ? 'INTERNAL' : 'EXTERNAL';
+            }
+            if (!isset($event['country'])) {
+                $event['country'] = 'Unknown';
+            }
+            
+            // Normalize IP field names for consistency
+            if (!isset($event['source_ip']) && isset($event['source'])) {
+                $event['source_ip'] = $event['source'];
+            }
+            if (!isset($event['target_ip']) && isset($event['target'])) {
+                $event['target_ip'] = $event['target'];
+            }
+            
+            // Attach raw logs to log_data events
             if (!isset($event['raw_logs'])) {
                 $event['raw_logs'] = [];
                 if ($this->logsModel !== null) {
@@ -56,6 +84,7 @@ class EventModel {
         // Load from Python-generated security events
         $pythonEvents = $this->loadPythonSecurityEvents();
         $events = array_merge($events, $pythonEvents);
+        $events = $this->deduplicateEvents($events);
         
         // Sort by timestamp (newest first) if timestamps exist
         usort($events, function($a, $b) {
@@ -93,6 +122,17 @@ class EventModel {
                 preg_match('/^(\w+)/', $event['severity_sticker'], $matches);
                 $event['severity'] = $matches[1] ?? 'Low';
             }
+
+            // Ensure attack title exists for UI rendering (dashboard/event list)
+            if (empty($event['description'])) {
+                if (!empty($event['attack_type'])) {
+                    $event['description'] = $event['attack_type'];
+                } elseif (!empty($event['formatted_log'])) {
+                    $event['description'] = $event['formatted_log'];
+                } else {
+                    $event['description'] = 'Suspicious Activity';
+                }
+            }
             
             // Ensure event has all required fields
             if (!isset($event['type'])) {
@@ -105,6 +145,11 @@ class EventModel {
             // Add source_ip for consistency (Python events use 'source')
             if (!isset($event['source_ip']) && isset($event['source'])) {
                 $event['source_ip'] = $event['source'];
+            }
+
+            // Normalize target fields used by dashboard/log views
+            if (!isset($event['target_ip']) && isset($event['target'])) {
+                $event['target_ip'] = $event['target'];
             }
             
             // Fetch associated raw logs if LogsModel is available
@@ -183,7 +228,13 @@ class EventModel {
                     }
                 }
             }
+            if (isset($event['raw_logs']) && is_array($event['raw_logs'])) {
+                $event['raw_logs'] = array_values(array_unique(array_filter($event['raw_logs'])));
+            }
         }
+        unset($event);
+
+        $events = $this->deduplicateEvents($events);
         
         // Sort by id (newest first, assuming higher id is newer)
         usort($events, function($a, $b) {
@@ -196,6 +247,64 @@ class EventModel {
         }
         
         return $events;
+    }
+
+    /**
+     * Remove duplicate suspicious events using id and a stable content fingerprint.
+     */
+    private function deduplicateEvents($events) {
+        if (!is_array($events) || empty($events)) {
+            return [];
+        }
+
+        $seen = [];
+        $deduped = [];
+        foreach ($events as $event) {
+            if (!is_array($event)) {
+                continue;
+            }
+
+            if (isset($event['raw_logs']) && is_array($event['raw_logs'])) {
+                $event['raw_logs'] = array_values(array_unique(array_filter($event['raw_logs'])));
+            }
+
+            $key = $this->buildEventDedupKey($event);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $event;
+        }
+        return $deduped;
+    }
+
+    /**
+     * Build deterministic key for event deduplication.
+     */
+    private function buildEventDedupKey($event) {
+        $id = trim((string)($event['id'] ?? ''));
+        $idLower = strtolower($id);
+        // Only trust IDs that look meaningful; placeholder IDs like 0 should not collapse distinct events.
+        if ($id !== '' && $id !== '0' && $idLower !== 'unknown' && $idLower !== 'n/a') {
+            return 'id:' . $idLower;
+        }
+
+        $timestamp = trim((string)($event['timestamp'] ?? $event['time'] ?? ''));
+        $source = trim((string)($event['source_ip'] ?? $event['source'] ?? $event['ip'] ?? ''));
+        $target = trim((string)($event['target'] ?? $event['target_device'] ?? ''));
+        $attackType = trim((string)($event['attack_type'] ?? ''));
+        $description = trim((string)($event['description'] ?? $event['formatted_log'] ?? $event['details'] ?? ''));
+        $severity = trim((string)($event['severity'] ?? $event['severity_sticker'] ?? ''));
+
+        $parts = [
+            strtolower($timestamp),
+            strtolower($source),
+            strtolower($target),
+            strtolower($attackType),
+            strtolower($description),
+            strtolower($severity),
+        ];
+        return 'fp:' . md5(implode('|', $parts));
     }
     
     /**

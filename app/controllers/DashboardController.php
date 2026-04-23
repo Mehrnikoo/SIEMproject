@@ -19,9 +19,9 @@ class DashboardController {
      * Render dashboard view
      */
     public function index() {
-        // Load limited event data for performance
-        $real_events_raw = $this->eventModel->loadRealEvents(20);
-        $sim_events_raw = $this->eventModel->loadSimulatedEvents(20);
+        // Load full event sets so dashboard counts reflect all analyzed events.
+        $real_events_raw = $this->eventModel->loadRealEvents();
+        $sim_events_raw = $this->eventModel->loadSimulatedEvents();
         
         // Check for data errors
         $data_error = null;

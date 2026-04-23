@@ -218,8 +218,27 @@ function handle_get_events($config, $pythonLogsDir) {
         $content = @file_get_contents($real_file);
         $logDataEvents = json_decode($content, true) ?: [];
         
-        // Attach raw_logs if not already present
+        // Normalize real events and ensure they have descriptions
         foreach ($logDataEvents as &$event) {
+            // Add description field from attack_type or details for UI display
+            if (empty($event['description'])) {
+                if (!empty($event['attack_type'])) {
+                    $event['description'] = $event['attack_type'];
+                } elseif (!empty($event['details'])) {
+                    $event['description'] = $event['details'];
+                } else {
+                    $event['description'] = 'Suspicious Activity';
+                }
+            }
+            
+            // Normalize IP field names
+            if (!isset($event['source_ip']) && isset($event['source'])) {
+                $event['source_ip'] = $event['source'];
+            }
+            if (!isset($event['target_ip']) && isset($event['target'])) {
+                $event['target_ip'] = $event['target'];
+            }
+            
             if (!isset($event['raw_logs'])) {
                 $event['raw_logs'] = [];
             }
@@ -233,12 +252,24 @@ function handle_get_events($config, $pythonLogsDir) {
         $content = @file_get_contents($security_file);
         $pythonEvents = json_decode($content, true) ?: [];
         
-        // Normalize Python events and ensure they have raw_logs
+        // Normalize Python events and ensure they have descriptions and raw_logs
         foreach ($pythonEvents as &$event) {
             if (isset($event['severity_sticker'])) {
                 preg_match('/^(\w+)/', $event['severity_sticker'], $matches);
                 $event['severity'] = $matches[1] ?? 'Low';
             }
+            
+            // Ensure description exists for UI rendering
+            if (empty($event['description'])) {
+                if (!empty($event['attack_type'])) {
+                    $event['description'] = $event['attack_type'];
+                } elseif (!empty($event['formatted_log'])) {
+                    $event['description'] = $event['formatted_log'];
+                } else {
+                    $event['description'] = 'Suspicious Activity';
+                }
+            }
+            
             if (!isset($event['raw_logs'])) {
                 $event['raw_logs'] = [];
             }
