@@ -1,89 +1,70 @@
-# 🚀 SIEM Project - Start Here
+# SIEM Project Documentation
 
-> **⭐ NEW USERS**: Read **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - it's the only documentation you need!
+This repository uses four documentation files only:
 
----
+1. `QUICK_SETUP.md` - fast installation and first-run steps (includes syslog quick start)
+2. `CONFIGURATION.md` - full configuration reference (includes syslog configuration)
+3. `README.md` - core project documentation and architecture overview (this file)
+4. `USER_GUIDE.md` - operations, usage, troubleshooting, API usage, and maintenance
 
-## Quick Links
+## Project Overview
 
-📖 **[SETUP_GUIDE.md](SETUP_GUIDE.md)** ← **START HERE**
-- Complete installation & configuration
-- Step-by-step setup process  
-- All features explained
-- Troubleshooting guide
+This is a Python + PHP SIEM platform that:
+- collects logs from system/web/network sources and syslog devices
+- detects suspicious events (SQLi, XSS, brute force, malware indicators, privilege escalation, and more)
+- stores and correlates events with raw logs
+- visualizes security data in the web dashboard and VLAN views
+- exposes API endpoints for integrations and automation
 
----
+## Core Capabilities
 
-## What is This?
+- Real-time detection and event generation from monitored logs
+- Syslog ingestion from network infrastructure devices
+- Severity classification and threat scoring
+- Event + raw-log correlation
+- Geolocation visualization and event stream UI
+- Logs viewer, sync status, and REST APIs
 
-A **Security Information Event Management (SIEM) system** that monitors your server for threats and displays them on a web dashboard.
-
-**Key Features:**
-- 🎯 Real-time attack detection (SQL Injection, XSS, brute force, etc.)
-- 🗺️ Geolocation-based attack visualization on interactive map
-- 📊 Web dashboard with event details and raw logs
-- 🔍 Logs viewer with expandable event details
-- 🔄 REST API for system integration
-
----
-
-## 60-Second Quick Start
-
-```bash
-# 1. Start Apache
-sudo /opt/lampp/lampp start
-
-# 2. Start Python SIEM
-cd /opt/lampp/htdocs/SIEMproject
-python3 pythonSIEMscript.py
-
-# 3. Open website
-# http://localhost/SIEMproject/
-```
-
-That's it! Events will start appearing on the dashboard.
-
----
-
-## How It Works
+## High-Level Architecture
 
 ```
-Python Script  →  Detects threats  →  Sends to API  →  
-Website shows  ←  Displays on map   ←  Stores events  ←
+Data Sources (system logs, web logs, network logs, syslog devices)
+  -> Collectors (pythonSIEMscript.py, SyslogListener.php/syslog_receiver.py)
+  -> Detection + Normalization
+  -> JSON persistence (captured_logs/*.json, log_data.json, raw_logs.json, sim_data.json)
+  -> PHP models/controllers
+  -> Dashboard / VLAN / Logs UI + API endpoints
 ```
 
-**Python script** monitors logs in the background and automatically posts security events to the **PHP API**, which stores them and displays them on the website dashboard.
+## Main Components
 
----
+- `pythonSIEMscript.py`
+  - tails and parses log streams
+  - detects attacks and classifies severity
+  - persists network status and scan metrics
+  - forwards events to API
+- `api.php`
+  - handles event and syslog routes
+  - serves data to frontend/API clients
+- `app/models/*`
+  - event loading, deduplication, enrichment, syslog analytics
+- `app/controllers/*`
+  - dashboard, logs, vlan, sync, and syslog APIs
+- `public/assets/js/map.js`
+  - map rendering, event list rendering, frontend filtering/dedup behavior
 
-## Need Help?
+## Data Files
 
-1. **Installation issues** → See SETUP_GUIDE.md section "Complete Setup"
-2. **Not seeing events** → See SETUP_GUIDE.md section "Troubleshooting"
-3. **Want details** → See SETUP_GUIDE.md section "System Architecture"
+- `log_data.json` - primary event data
+- `sim_data.json` - simulated events
+- `raw_logs.json` - consolidated raw logs
+- `server_status.json` - host/network status
+- `captured_logs/security_events.json` - Python-generated security events
+- `captured_logs/syslog_received.json` - received syslog entries
+- `captured_logs/network_*.json` - network scan/stats data
 
----
+## Where To Go Next
 
-## System Requirements
-
-### Option 1: Native Installation (Linux)
-- Linux (Ubuntu, CentOS, etc.)
-- LAMPP installed at `/opt/lampp/`
-- Python 3.6+
-- 2GB RAM minimum
-
-### Option 2: Docker (Any OS - Windows, Mac, Linux)
-```bash
-# Install Docker first, then:
-docker build -t siem .
-docker run -p 80:80 -p 443:443 siem
-```
-✅ Works identically on Windows, Mac, Linux  
-✅ No OS-specific setup needed  
-✅ All dependencies pre-installed  
-
-**See [SETUP_GUIDE.md](SETUP_GUIDE.md) for complete Docker or native installation steps**
-
----
-
-**Ready to set up? → Open [SETUP_GUIDE.md](SETUP_GUIDE.md)**
+- Need to run it now? Open `QUICK_SETUP.md`
+- Need to tune settings or syslog devices? Open `CONFIGURATION.md`
+- Need day-to-day usage, API calls, and troubleshooting? Open `USER_GUIDE.md`
