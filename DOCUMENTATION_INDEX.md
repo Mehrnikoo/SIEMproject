@@ -25,6 +25,8 @@ This is your one-stop guide for everything - installation, configuration, usage,
 |------|---------|----------|
 | **[SETUP_GUIDE.md](SETUP_GUIDE.md)** | Complete setup and configuration guide | **ALL USERS - START HERE** |
 | **[README_MAIN.md](README_MAIN.md)** | Quick overview and links | New users looking for orientation |
+| **[SYSLOG_QUICK_START.md](SYSLOG_QUICK_START.md)** | Get syslog working in 5 minutes | Users wanting to receive network device logs |
+| **[SYSLOG_SETUP.md](SYSLOG_SETUP.md)** | Complete syslog configuration guide | System admins configuring network devices |
 | **[RAW_LOGS_IMPLEMENTATION.md](RAW_LOGS_IMPLEMENTATION.md)** | How raw logs are attached to events | Developers interested in that feature |
 | [README.md](README.md) | Legacy quick start (see SETUP_GUIDE instead) | Deprecated - use SETUP_GUIDE |
 | [QUICK_START.md](QUICK_START.md) | Legacy quick start (see SETUP_GUIDE instead) | Deprecated - use SETUP_GUIDE |
@@ -44,6 +46,11 @@ This is your one-stop guide for everything - installation, configuration, usage,
 2. [SETUP_GUIDE.md](SETUP_GUIDE.md) - Complete setup (15 min to read, 5 min to execute)
 3. Open website and explore!
 
+### For Network Device Monitoring (Syslog)
+1. [SYSLOG_QUICK_START.md](SYSLOG_QUICK_START.md) - Get syslog working in 5 minutes
+2. [SYSLOG_SETUP.md](SYSLOG_SETUP.md) - Configure specific devices (routers, firewalls, servers)
+3. Send test messages and verify in dashboard
+
 ### For Developers
 1. [SETUP_GUIDE.md](SETUP_GUIDE.md) - Understand the system (required)
 2. [CHANGES_SUMMARY.md](CHANGES_SUMMARY.md) - See what changed
@@ -54,8 +61,9 @@ This is your one-stop guide for everything - installation, configuration, usage,
 ### For System Administrators
 1. [SETUP_GUIDE.md](SETUP_GUIDE.md) - Installation section
 2. [SETUP_GUIDE.md](SETUP_GUIDE.md) - Configuration Details section
-3. [SETUP_GUIDE.md](SETUP_GUIDE.md) - Troubleshooting section
-4. Source files: `app/config/config.php`, `pythonSIEMscript.py`
+3. [SYSLOG_SETUP.md](SYSLOG_SETUP.md) - Configure syslog for enterprise monitoring
+4. [SETUP_GUIDE.md](SETUP_GUIDE.md) - Troubleshooting section
+5. Source files: `app/config/config.php`, `pythonSIEMscript.py`, `app/services/SyslogListener.php`
 
 ---
 
@@ -78,6 +86,9 @@ This is your one-stop guide for everything - installation, configuration, usage,
 
 ### "What exactly changed in the code?"
 → See [CHANGES_SUMMARY.md](CHANGES_SUMMARY.md)
+
+### "How do I get logs from my firewalls/routers/servers?"
+→ See [SYSLOG_QUICK_START.md](SYSLOG_QUICK_START.md) (5 min) or [SYSLOG_SETUP.md](SYSLOG_SETUP.md) (detailed)
 
 ### "What are the technical details?"
 → See [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)

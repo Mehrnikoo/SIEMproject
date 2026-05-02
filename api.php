@@ -73,6 +73,42 @@ function handle_request($method, $path, $data, $config, $pythonLogsDir) {
         ];
     }
     
+    // Syslog endpoints
+    require_once BASE_PATH . '/app/controllers/SyslogController.php';
+    $syslog_controller = new SyslogController($config);
+    
+    if ($method === 'GET' && in_array($path, ['/syslog-entries', '/syslog-entries/'])) {
+        return handle_syslog_entries($syslog_controller);
+    }
+    
+    if ($method === 'GET' && in_array($path, ['/syslog-by-ip', '/syslog-by-ip/'])) {
+        return handle_syslog_by_ip($syslog_controller);
+    }
+    
+    if ($method === 'GET' && in_array($path, ['/syslog-high-severity', '/syslog-high-severity/'])) {
+        return handle_syslog_high_severity($syslog_controller);
+    }
+    
+    if ($method === 'GET' && in_array($path, ['/syslog-stats', '/syslog-stats/'])) {
+        return handle_syslog_stats($syslog_controller);
+    }
+    
+    if ($method === 'GET' && in_array($path, ['/syslog-threats', '/syslog-threats/'])) {
+        return handle_syslog_threats($syslog_controller);
+    }
+    
+    if ($method === 'GET' && in_array($path, ['/syslog-status', '/syslog-status/'])) {
+        return handle_syslog_status($syslog_controller);
+    }
+    
+    if ($method === 'GET' && in_array($path, ['/syslog-export', '/syslog-export/'])) {
+        return handle_syslog_export($syslog_controller);
+    }
+    
+    if ($method === 'POST' && in_array($path, ['/syslog-clear', '/syslog-clear/'])) {
+        return handle_syslog_clear($syslog_controller);
+    }
+    
     return [
         'code' => 404,
         'status' => 'error',
@@ -401,5 +437,84 @@ function handle_get_logs($pythonLogsDir) {
         'status' => 'success',
         'count' => count($logs),
         'logs' => array_slice($logs, 0, 1000)
+    ];
+}
+
+/**
+ * Syslog API Handlers
+ */
+
+function handle_syslog_entries($controller) {
+    $result = $controller->getEntries();
+    return [
+        'code' => 200,
+        'status' => $result['status'] ?? 'success',
+        ...$result
+    ];
+}
+
+function handle_syslog_by_ip($controller) {
+    $result = $controller->getByIP();
+    $code = $result['status'] === 'error' ? 400 : 200;
+    return [
+        'code' => $code,
+        'status' => $result['status'] ?? 'success',
+        ...$result
+    ];
+}
+
+function handle_syslog_high_severity($controller) {
+    $result = $controller->getHighSeverity();
+    return [
+        'code' => 200,
+        'status' => $result['status'] ?? 'success',
+        ...$result
+    ];
+}
+
+function handle_syslog_stats($controller) {
+    $result = $controller->getStats();
+    return [
+        'code' => 200,
+        'status' => $result['status'] ?? 'success',
+        ...$result
+    ];
+}
+
+function handle_syslog_threats($controller) {
+    $result = $controller->detectThreats();
+    return [
+        'code' => 200,
+        'status' => $result['status'] ?? 'success',
+        ...$result
+    ];
+}
+
+function handle_syslog_status($controller) {
+    $result = $controller->getStatus();
+    return [
+        'code' => 200,
+        'status' => $result['status'] ?? 'success',
+        ...$result
+    ];
+}
+
+function handle_syslog_export($controller) {
+    $result = $controller->export();
+    $code = $result['status'] === 'error' ? 400 : 200;
+    return [
+        'code' => $code,
+        'status' => $result['status'] ?? 'success',
+        ...$result
+    ];
+}
+
+function handle_syslog_clear($controller) {
+    $result = $controller->clear();
+    $code = $result['status'] === 'error' ? 401 : 200;
+    return [
+        'code' => $code,
+        'status' => $result['status'] ?? 'success',
+        ...$result
     ];
 }
