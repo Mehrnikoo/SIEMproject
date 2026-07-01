@@ -94,6 +94,11 @@ class Read_logs(Logs):
     def start_log_streams(self):
         print("[Read_logs] Initializing continuous log streams...")
         
+        SYSLOG_RECEIVED_PATH = os.path.join(self.log_dir, "syslog_received.json")
+        if os.path.exists(SYSLOG_RECEIVED_PATH):
+            print(f"[Read_logs] Found incoming Syslog cache at {SYSLOG_RECEIVED_PATH}, tailing...")
+            self.start_tailing_thread(self._tail_file, (SYSLOG_RECEIVED_PATH, 'linux_system'))
+
         # 1. System Logs (OS specific)
         if self.os_type == 'Linux':
             # journalctl -f -o json (Follows system logs in JSON format)

@@ -1,0 +1,8 @@
+[
+  {
+    "timestamp": "2026-07-01T12:00:00+00:00",
+    "received_at": "2026-07-01T12:00:00+00:00",
+    "source_ip": "192.168.1.10",
+    "message": "sshd[1234]: Failed password for root from 192.168.1.200 port 22 ssh2"
+  }
+]

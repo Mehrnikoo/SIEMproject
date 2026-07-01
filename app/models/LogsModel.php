@@ -52,8 +52,12 @@ class LogsModel {
             return [];
         }
         
-        // Read all JSON files except security_events.json
         $files = glob($capturedLogsDir . '/*.json');
+        if ($files === false) {
+            return [];
+        }
+        
+        // Read all JSON files except security_events.json
         foreach ($files as $file) {
             $filename = basename($file, '.json');
             
@@ -63,27 +67,88 @@ class LogsModel {
             }
             
             $content = @file_get_contents($file);
-            $data = json_decode($content, true);
+            if ($content === false || trim($content) === '') {
+                continue;
+            }
             
-            if (is_array($data)) {
-                foreach ($data as $entry) {
-                    // Normalize to standard log format
-                    $log = [
-                        'timestamp' => $entry['timestamp'] ?? date('Y-m-d H:i:s'),
-                        'log_type' => $filename, // e.g., "nginx_access", "linux_system"
-                        'log_file' => $filename,
-                        'raw_line' => $this->extractRawLine($entry),
-                        'source_ip' => $entry['ip'] ?? $entry['source'] ?? 'unknown',
-                        'from_python' => true,
-                        'data' => $entry
-                    ];
-                    
-                    $logs[] = $log;
+            $data = json_decode($content, true);
+            if (!is_array($data)) {
+                continue;
+            }
+
+            // Support files that wrap entries in an object (for example {"entries": [...]})
+            if (isset($data['entries']) && is_array($data['entries'])) {
+                $data = $data['entries'];
+            } elseif ($this->isAssociativeArray($data) && ($this->isLogEntry($data) || $this->isSyslogEntry($data))) {
+                $data = [$data];
+            }
+
+            if (!is_array($data)) {
+                continue;
+            }
+
+            foreach ($data as $entry) {
+                if (!is_array($entry) && !is_string($entry)) {
+                    continue;
                 }
+
+                $normalizedEntry = is_array($entry) ? $entry : ['message' => (string) $entry];
+
+                // Normalize to standard log format
+                $log = [
+                    'timestamp' => $normalizedEntry['timestamp'] ?? $normalizedEntry['received_at'] ?? $normalizedEntry['time'] ?? date('Y-m-d H:i:s'),
+                    'log_type' => $filename,
+                    'log_file' => $filename . '.json',
+                    'raw_line' => $this->extractRawLine($normalizedEntry),
+                    'source_ip' => $normalizedEntry['ip'] ?? $normalizedEntry['source'] ?? $normalizedEntry['source_ip'] ?? 'unknown',
+                    'destination_ip' => $normalizedEntry['destination_ip'] ?? $normalizedEntry['dst'] ?? '',
+                    'from_python' => true,
+                    'data' => $normalizedEntry
+                ];
+                
+                $logs[] = $log;
             }
         }
         
         return $logs;
+    }
+
+    /**
+     * Check whether an array is an associative object instead of a list of entries.
+     */
+    private function isAssociativeArray($value) {
+        if (!is_array($value)) {
+            return false;
+        }
+
+        return array_keys($value) !== range(0, count($value) - 1);
+    }
+
+    /**
+     * Determine whether an array looks like a generic log entry.
+     */
+    private function isLogEntry($entry) {
+        return is_array($entry) && (
+            array_key_exists('message', $entry) ||
+            array_key_exists('MESSAGE', $entry) ||
+            array_key_exists('formatted_log', $entry) ||
+            array_key_exists('timestamp', $entry) ||
+            array_key_exists('received_at', $entry) ||
+            array_key_exists('raw_message', $entry)
+        );
+    }
+
+    /**
+     * Determine whether an array looks like a syslog entry.
+     */
+    private function isSyslogEntry($entry) {
+        return is_array($entry) && (
+            array_key_exists('source_ip', $entry) ||
+            array_key_exists('facility', $entry) ||
+            array_key_exists('severity', $entry) ||
+            array_key_exists('tag', $entry) ||
+            array_key_exists('hostname', $entry)
+        );
     }
     
     /**
@@ -101,6 +166,9 @@ class LogsModel {
             }
             if (isset($entry['MESSAGE'])) {
                 return $entry['MESSAGE'];
+            }
+            if (isset($entry['raw_message'])) {
+                return $entry['raw_message'];
             }
             if (isset($entry['formatted_log'])) {
                 return $entry['formatted_log'];
