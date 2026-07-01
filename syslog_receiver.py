@@ -20,6 +20,15 @@ from datetime import datetime
 from pathlib import Path
 import signal
 
+try:
+    from pythonSIEMscript import Containment, Network, Parse_logs, Sort_event
+except Exception as exc:
+    Containment = Network = Parse_logs = Sort_event = None
+    PARSER_IMPORT_ERROR = exc
+else:
+    PARSER_IMPORT_ERROR = None
+
+
 class SyslogServer:
     def __init__(self, host='0.0.0.0', port=514, output_dir='captured_logs'):
         self.host = host
@@ -29,6 +38,8 @@ class SyslogServer:
         self.syslog_file = self.output_dir / 'syslog_received.json'
         self.socket = None
         self.running = True
+        self.parser = None
+        self._setup_detection_pipeline()
         
         # Signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -41,6 +52,45 @@ class SyslogServer:
         if self.socket:
             self.socket.close()
         sys.exit(0)
+
+    def _setup_detection_pipeline(self):
+        """Initialize the SIEM parsing and detection pipeline if available."""
+        if not all([Containment, Network, Parse_logs, Sort_event]):
+            print(f"[WARN] SIEM detection parser is unavailable: {PARSER_IMPORT_ERROR}")
+            return
+
+        try:
+            self.sort_engine = Sort_event()
+            self.network_engine = Network()
+            self.containment_engine = Containment(self.sort_engine)
+            self.parser = Parse_logs(self.sort_engine, self.network_engine, self.containment_engine)
+            print("[INFO] SIEM attack detection pipeline enabled")
+        except Exception as exc:
+            print(f"[WARN] Failed to initialize SIEM detection pipeline: {exc}")
+            self.parser = None
+
+    def detect_attacks(self, entry):
+        """Route a parsed syslog entry through the SIEM detection engine."""
+        if not self.parser:
+            return
+
+        try:
+            detection_payload = {
+                'source': 'syslog',
+                'data': {
+                    'MESSAGE': entry.get('message', ''),
+                    'SYSLOG_IDENTIFIER': entry.get('tag', ''),
+                    'source_ip': entry.get('source_ip'),
+                    'hostname': entry.get('hostname'),
+                    'severity': entry.get('severity_name'),
+                    'facility': entry.get('facility_name'),
+                    'raw_message': entry.get('raw_message'),
+                    'timestamp': entry.get('timestamp')
+                }
+            }
+            self.parser.analyze_logs([detection_payload])
+        except Exception as exc:
+            print(f"[WARN] Attack detection failed: {exc}")
     
     def start(self):
         """Start the syslog server"""
@@ -90,6 +140,9 @@ class SyslogServer:
         
         # Store to file
         self.store_syslog(entry)
+
+        # Run SIEM detection on the parsed syslog message
+        self.detect_attacks(entry)
         
         # Log to console
         facility = entry.get('facility_name', 'unknown')
